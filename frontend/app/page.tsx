@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { apiRequest } from "@/lib/api/client";
+import { apiOrigin, apiRequest } from "@/lib/api/client";
 import type { AnalysisResult, ApiError, BaziChart, BirthPlace, Gender, InputMode, PdfReport } from "@/types/api";
 
 const defaultPlace: BirthPlace = {
@@ -328,9 +328,7 @@ export default function HomePage() {
       }
 
       setReport(result.data);
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api";
-      const origin = apiBase.replace(/\/api\/?$/, "");
-      window.open(`${origin}${result.data.downloadUrl}`, "_blank", "noopener,noreferrer");
+      window.open(`${apiOrigin()}${result.data.downloadUrl}`, "_blank", "noopener,noreferrer");
     } catch {
       setError({
         code: "NETWORK_ERROR",
@@ -523,6 +521,18 @@ export default function HomePage() {
             <h2 className="text-2xl font-semibold">{chart.profile.name} 的命盘</h2>
             <p className="mt-1 text-sm text-white/50">
               日主：{chart.dayMaster}，农历：{chart.profile.lunarDateText ?? "未提供"}
+            </p>
+          </div>
+
+          <div className="mb-5 grid gap-3 rounded-md bg-black/20 p-4 text-sm text-white/65 sm:grid-cols-2">
+            <p>公历：{chart.profile.solarDateTime ?? "未提供"}</p>
+            <p>真太阳时：{chart.profile.trueSolarTime ?? "未提供"}</p>
+            <p>出生地：{chart.profile.birthPlaceText ?? "未提供"}</p>
+            <p>
+              经纬度：
+              {chart.profile.latitude != null && chart.profile.longitude != null
+                ? `${chart.profile.latitude}, ${chart.profile.longitude}`
+                : "未提供"}
             </p>
           </div>
 
@@ -723,6 +733,10 @@ export default function HomePage() {
                 <p className="text-gold">
                   {analysis.status === "fallback" ? "本地摘要解读" : "AI 解读"}
                 </p>
+                <p className="text-xs text-white/45">
+                  {analysis.analysisId}
+                  {analysis.modelName ? ` · ${analysis.modelName}` : ""}
+                </p>
                 <p>{analysis.summary}</p>
               </div>
               {analysis.sections.map((section) => (
@@ -740,7 +754,15 @@ export default function HomePage() {
 
           {report ? (
             <div className="mt-4 rounded-md border border-emerald-400/30 bg-emerald-950/30 p-4 text-sm text-emerald-100">
-              PDF 已生成：{report.fileName}
+              PDF 已生成：
+              <a
+                className="ml-1 underline decoration-emerald-200/50 underline-offset-4"
+                href={`${apiOrigin()}${report.downloadUrl}`}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {report.fileName}
+              </a>
             </div>
           ) : null}
         </section>

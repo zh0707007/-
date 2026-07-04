@@ -20,8 +20,12 @@ class LlmClient:
 
         try:
             return self._generate_with_openai(chart, options)
-        except Exception:
-            return self._fallback_analysis(chart, options, warning="LLM 调用失败，已保留命盘并生成本地摘要解读")
+        except Exception as exc:
+            if self._is_timeout_error(exc):
+                warning = "LLM 调用超时，已保留命盘并生成本地摘要解读"
+            else:
+                warning = "LLM 调用失败，已保留命盘并生成本地摘要解读"
+            return self._fallback_analysis(chart, options, warning=warning)
 
     def _is_configured(self) -> bool:
         return bool(
@@ -30,6 +34,13 @@ class LlmClient:
             and settings.llm_api_key != "replace-with-real-key"
             and settings.llm_model != "replace-with-model-name"
         )
+
+    def _is_timeout_error(self, exc: Exception) -> bool:
+        return isinstance(exc, TimeoutError) or exc.__class__.__name__ in {
+            "APITimeoutError",
+            "TimeoutException",
+            "ReadTimeout",
+        }
 
     def _generate_with_openai(self, chart: dict, options: AnalysisOptions) -> dict:
         from openai import OpenAI

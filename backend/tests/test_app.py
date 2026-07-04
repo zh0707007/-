@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.db.session import SessionLocal, init_db
 from app.main import app
 from app.models.report import PdfReport
+from app.api.routes import analysis as analysis_route
 
 
 client = TestClient(app)
@@ -228,6 +229,54 @@ def test_analysis_generation_falls_back_without_llm_config():
     assert payload["data"]["status"] == "fallback"
     assert payload["data"]["analysisId"].startswith("analysis_")
     assert "传统文化" in payload["data"]["disclaimer"]
+
+
+def test_analysis_generation_falls_back_on_llm_timeout(monkeypatch):
+    chart = _create_manual_chart()
+
+    monkeypatch.setattr(analysis_route.llm_client, "_is_configured", lambda: True)
+
+    def raise_timeout(chart, options):
+        raise TimeoutError("simulated timeout")
+
+    monkeypatch.setattr(analysis_route.llm_client, "_generate_with_openai", raise_timeout)
+
+    response = client.post(
+        "/api/analysis/generate",
+        json={"chartId": chart["chartId"], "analysisOptions": {}},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["status"] == "fallback"
+    assert "超时" in payload["data"]["warnings"][0]
+
+
+def test_get_analysis_by_id_and_latest_for_chart():
+    chart = _create_manual_chart()
+    analysis_response = client.post(
+        "/api/analysis/generate",
+        json={"chartId": chart["chartId"], "analysisOptions": {}},
+    )
+    analysis = analysis_response.json()["data"]
+
+    by_id_response = client.get(f"/api/analysis/{analysis['analysisId']}")
+    latest_response = client.get(f"/api/analysis/chart/{chart['chartId']}/latest")
+
+    assert by_id_response.status_code == 200
+    assert latest_response.status_code == 200
+    assert by_id_response.json()["data"]["analysisId"] == analysis["analysisId"]
+    assert latest_response.json()["data"]["analysisId"] == analysis["analysisId"]
+
+
+def test_get_analysis_not_found():
+    response = client.get("/api/analysis/analysis_missing")
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "ANALYSIS_NOT_FOUND"
 
 
 def test_pdf_report_generation_and_download():
