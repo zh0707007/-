@@ -1,6 +1,10 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi.testclient import TestClient
 
+from app.db.session import SessionLocal, init_db
 from app.main import app
+from app.models.report import PdfReport
 
 
 client = TestClient(app)
@@ -270,6 +274,43 @@ def test_pdf_report_generation_with_chart_warnings():
     assert payload["data"]["status"] == "ready"
 
 
+def test_pdf_download_report_not_found():
+    response = client.get("/api/report/download/report_missing")
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "REPORT_NOT_FOUND"
+
+
+def test_pdf_download_report_expired():
+    _insert_report_record(
+        report_id="report_expired_for_test",
+        expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+
+    response = client.get("/api/report/download/report_expired_for_test")
+
+    assert response.status_code == 410
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "REPORT_EXPIRED"
+
+
+def test_pdf_download_missing_file_returns_storage_error():
+    _insert_report_record(
+        report_id="report_missing_file_for_test",
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+
+    response = client.get("/api/report/download/report_missing_file_for_test")
+
+    assert response.status_code == 500
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "REPORT_STORAGE_ERROR"
+
+
 def test_analysis_chart_not_found():
     response = client.post(
         "/api/analysis/generate",
@@ -301,3 +342,28 @@ def _create_manual_chart(unknown_birth_hour: bool = False) -> dict:
     )
     assert response.status_code == 200
     return response.json()["data"]
+
+
+def _insert_report_record(report_id: str, expires_at: datetime) -> None:
+    init_db()
+    db = SessionLocal()
+    try:
+        existing = db.get(PdfReport, report_id)
+        if existing:
+            db.delete(existing)
+            db.commit()
+        db.add(
+            PdfReport(
+                id=report_id,
+                chart_id="chart_test",
+                analysis_id="analysis_test",
+                file_name=f"{report_id}.pdf",
+                file_path=f"reports/{report_id}.pdf",
+                download_url=f"/api/report/download/{report_id}",
+                status="ready",
+                expires_at=expires_at,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
