@@ -49,6 +49,11 @@ def test_manual_chart_calculation():
     assert payload["success"] is True
     assert payload["data"]["pillars"]["day"]["tenGod"] == "日主"
     assert payload["data"]["pillars"]["hour"]["stem"] == "戊"
+    assert payload["data"]["luckCycles"][0]["directionText"] == "逆行"
+    assert payload["data"]["luckCycles"][0]["tenGodStem"] == "正印"
+    assert payload["data"]["annualCycles"][5]["age"]
+    assert payload["data"]["annualCycles"][5]["tenGodStem"]
+    assert payload["data"]["monthlyCycles"][0]["tenGodStem"]
     assert payload["data"]["requestId"].startswith("req_")
 
 

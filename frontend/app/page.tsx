@@ -580,14 +580,16 @@ export default function HomePage() {
             <div>
               <h3 className="mb-3 text-lg font-semibold">大运</h3>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] border-collapse text-center text-sm">
+                <table className="w-full min-w-[860px] border-collapse text-center text-sm">
                   <thead className="text-white/50">
                     <tr>
                       <th className="border border-white/10 p-3">序号</th>
+                      <th className="border border-white/10 p-3">顺逆</th>
                       <th className="border border-white/10 p-3">年龄</th>
                       <th className="border border-white/10 p-3">年份</th>
                       <th className="border border-white/10 p-3">天干</th>
                       <th className="border border-white/10 p-3">地支</th>
+                      <th className="border border-white/10 p-3">十神</th>
                       <th className="border border-white/10 p-3">当前</th>
                     </tr>
                   </thead>
@@ -595,6 +597,7 @@ export default function HomePage() {
                     {chart.luckCycles.map((cycle) => (
                       <tr className={cycle.isCurrent ? "bg-gold/10 text-gold" : ""} key={cycle.index}>
                         <td className="border border-white/10 p-3">{cycle.index}</td>
+                        <td className="border border-white/10 p-3">{cycle.directionText ?? ""}</td>
                         <td className="border border-white/10 p-3">
                           {cycle.startAge}-{cycle.endAge}
                         </td>
@@ -603,6 +606,9 @@ export default function HomePage() {
                         </td>
                         <td className="border border-white/10 p-3">{cycle.stem}</td>
                         <td className="border border-white/10 p-3">{cycle.branch}</td>
+                        <td className="border border-white/10 p-3">
+                          {cycle.tenGodStem ?? ""}/{cycle.tenGodBranch ?? ""}
+                        </td>
                         <td className="border border-white/10 p-3">{cycle.isCurrent ? "是" : ""}</td>
                       </tr>
                     ))}
@@ -614,12 +620,14 @@ export default function HomePage() {
             <div>
               <h3 className="mb-3 text-lg font-semibold">流年</h3>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] border-collapse text-center text-sm">
+                <table className="w-full min-w-[760px] border-collapse text-center text-sm">
                   <thead className="text-white/50">
                     <tr>
                       <th className="border border-white/10 p-3">年份</th>
+                      <th className="border border-white/10 p-3">年龄</th>
                       <th className="border border-white/10 p-3">天干</th>
                       <th className="border border-white/10 p-3">地支</th>
+                      <th className="border border-white/10 p-3">十神</th>
                       <th className="border border-white/10 p-3">当前</th>
                       <th className="border border-white/10 p-3">提示</th>
                     </tr>
@@ -628,8 +636,12 @@ export default function HomePage() {
                     {chart.annualCycles.map((cycle) => (
                       <tr className={cycle.isCurrent ? "bg-gold/10 text-gold" : ""} key={cycle.year}>
                         <td className="border border-white/10 p-3">{cycle.year}</td>
+                        <td className="border border-white/10 p-3">{cycle.age ?? ""}</td>
                         <td className="border border-white/10 p-3">{cycle.stem}</td>
                         <td className="border border-white/10 p-3">{cycle.branch}</td>
+                        <td className="border border-white/10 p-3">
+                          {cycle.tenGodStem ?? ""}/{cycle.tenGodBranch ?? ""}
+                        </td>
                         <td className="border border-white/10 p-3">{cycle.isCurrent ? "是" : ""}</td>
                         <td className="border border-white/10 p-3">{cycle.relationSummary || "待解读"}</td>
                       </tr>
@@ -642,7 +654,7 @@ export default function HomePage() {
             <div>
               <h3 className="mb-3 text-lg font-semibold">流月</h3>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] border-collapse text-center text-sm">
+                <table className="w-full min-w-[820px] border-collapse text-center text-sm">
                   <thead className="text-white/50">
                     <tr>
                       <th className="border border-white/10 p-3">序号</th>
@@ -650,6 +662,7 @@ export default function HomePage() {
                       <th className="border border-white/10 p-3">日期</th>
                       <th className="border border-white/10 p-3">天干</th>
                       <th className="border border-white/10 p-3">地支</th>
+                      <th className="border border-white/10 p-3">十神</th>
                       <th className="border border-white/10 p-3">当前</th>
                     </tr>
                   </thead>
@@ -661,6 +674,9 @@ export default function HomePage() {
                         <td className="border border-white/10 p-3">{cycle.solarTermDate}</td>
                         <td className="border border-white/10 p-3">{cycle.stem}</td>
                         <td className="border border-white/10 p-3">{cycle.branch}</td>
+                        <td className="border border-white/10 p-3">
+                          {cycle.tenGodStem ?? ""}/{cycle.tenGodBranch ?? ""}
+                        </td>
                         <td className="border border-white/10 p-3">{cycle.isCurrent ? "是" : ""}</td>
                       </tr>
                     ))}

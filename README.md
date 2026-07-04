@@ -61,6 +61,7 @@ pytest
 - 已创建前端和后端骨架。
 - `GET /api/geo/search` 已支持内置城市检索，前端可选择出生地并用于真太阳时计算。
 - `POST /api/chart/calculate` 已支持手动四柱、公历、农历排盘。
+- 大运、流年、流月已输出当前项、年龄、十神，并在前端与 PDF 中展示。
 - 排盘结果会保存到 SQLite 的 `chart_requests` 和 `charts` 表。
 - `POST /api/analysis/generate` 已支持 OpenAI-compatible 调用与本地摘要降级。
 - `POST /api/report/pdf` 已支持服务端生成 PDF，包含四柱、大运、流年、流月、提示信息和免责声明，并通过下载接口返回报告文件。

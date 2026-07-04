@@ -52,6 +52,8 @@ export type LuckCycle = {
   branch: string;
   tenGodStem?: string | null;
   tenGodBranch?: string | null;
+  direction?: "forward" | "backward" | string;
+  directionText?: string;
   isCurrent: boolean;
 };
 
@@ -72,6 +74,8 @@ export type MonthlyCycle = {
   solarTermDate: string;
   stem: string;
   branch: string;
+  tenGodStem?: string | null;
+  tenGodBranch?: string | null;
   relationSummary?: string;
   isCurrent: boolean;
 };

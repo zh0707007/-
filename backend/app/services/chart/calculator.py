@@ -157,9 +157,9 @@ class ChartCalculator:
             "pillars": pillars,
             "dayMaster": day_master,
             "fiveElementStats": five_element_stats,
-            "luckCycles": self._placeholder_luck_cycles(base_year, pillars["month"]),
-            "annualCycles": self._annual_cycles(base_year),
-            "monthlyCycles": self._monthly_cycles(base_year),
+            "luckCycles": self._luck_cycles(base_year, pillars, profile["gender"]),
+            "annualCycles": self._annual_cycles(base_year, day_master),
+            "monthlyCycles": self._monthly_cycles(datetime.now().year, day_master),
             "warnings": warnings,
         }
 
@@ -234,61 +234,92 @@ class ChartCalculator:
                 stats[STEM_ELEMENTS[hidden_stem]] += 1
         return stats
 
-    def _placeholder_luck_cycles(self, base_year: int, month_pillar: dict) -> list[dict]:
+    def _luck_cycles(self, base_year: int, pillars: dict, gender: str) -> list[dict]:
+        day_stem = pillars["day"]["stem"]
+        month_pillar = pillars["month"]
+        direction = self._luck_direction(pillars["year"]["stem"], gender)
         month_index = jiazi_index(month_pillar["stem"], month_pillar["branch"]) or 0
+        current_age = self._nominal_age(base_year)
         cycles = []
         for index in range(8):
-            jiazi = (month_index + index + 1) % 60
+            step = index + 1 if direction == "forward" else -(index + 1)
+            jiazi = (month_index + step) % 60
             stem = HEAVENLY_STEMS[jiazi % 10]
             branch = EARTHLY_BRANCHES[jiazi % 12]
-            start_year = base_year + index * 10
+            start_age = index * 10 + 1
+            end_age = start_age + 9
+            start_year = base_year + start_age - 1
             cycles.append(
                 {
                     "index": index + 1,
                     "startYear": start_year,
                     "endYear": start_year + 9,
-                    "startAge": index * 10 + 1,
-                    "endAge": index * 10 + 10,
+                    "startAge": start_age,
+                    "endAge": end_age,
                     "stem": stem,
                     "branch": branch,
-                    "tenGodStem": None,
-                    "tenGodBranch": None,
-                    "isCurrent": index == 0,
+                    "tenGodStem": TEN_GODS_BY_DAY_STEM[day_stem][stem],
+                    "tenGodBranch": self._ten_god_for_branch(day_stem, branch),
+                    "direction": direction,
+                    "directionText": "顺行" if direction == "forward" else "逆行",
+                    "isCurrent": start_age <= current_age <= end_age,
                 }
             )
         return cycles
 
-    def _annual_cycles(self, base_year: int) -> list[dict]:
+    def _annual_cycles(self, base_year: int, day_stem: str) -> list[dict]:
         current_year = datetime.now().year
         start = current_year - 5
         return [
             {
                 "year": year,
-                "age": None,
+                "age": self._nominal_age(base_year, year),
                 "stem": HEAVENLY_STEMS[(year - 4) % 10],
                 "branch": EARTHLY_BRANCHES[(year - 4) % 12],
-                "tenGodStem": None,
-                "tenGodBranch": None,
+                "tenGodStem": TEN_GODS_BY_DAY_STEM[day_stem][HEAVENLY_STEMS[(year - 4) % 10]],
+                "tenGodBranch": self._ten_god_for_branch(
+                    day_stem,
+                    EARTHLY_BRANCHES[(year - 4) % 12],
+                ),
                 "isCurrent": year == current_year,
                 "relationSummary": "",
             }
             for year in range(start, start + 11)
         ]
 
-    def _monthly_cycles(self, year: int) -> list[dict]:
+    def _monthly_cycles(self, year: int, day_stem: str) -> list[dict]:
         solar_terms = ["立春", "惊蛰", "清明", "立夏", "芒种", "小暑", "立秋", "白露", "寒露", "立冬", "大雪", "小寒"]
-        return [
-            {
-                "index": index + 1,
-                "solarTerm": term,
-                "solarTermDate": f"{year}-{index + 2:02d}-01",
-                "stem": HEAVENLY_STEMS[(year + index) % 10],
-                "branch": EARTHLY_BRANCHES[(index + 2) % 12],
-                "relationSummary": "",
-                "isCurrent": index == datetime.now().month - 1,
-            }
-            for index, term in enumerate(solar_terms)
-        ]
+        cycles = []
+        for index, term in enumerate(solar_terms):
+            stem = HEAVENLY_STEMS[(year + index) % 10]
+            branch = EARTHLY_BRANCHES[(index + 2) % 12]
+            cycles.append(
+                {
+                    "index": index + 1,
+                    "solarTerm": term,
+                    "solarTermDate": f"{year}-{index + 2:02d}-01",
+                    "stem": stem,
+                    "branch": branch,
+                    "tenGodStem": TEN_GODS_BY_DAY_STEM[day_stem][stem],
+                    "tenGodBranch": self._ten_god_for_branch(day_stem, branch),
+                    "relationSummary": "",
+                    "isCurrent": index == datetime.now().month - 1,
+                }
+            )
+        return cycles
+
+    def _luck_direction(self, year_stem: str, gender: str) -> str:
+        is_yang_year = year_stem in {"甲", "丙", "戊", "庚", "壬"}
+        is_male = gender == "male"
+        return "forward" if is_yang_year == is_male else "backward"
+
+    def _ten_god_for_branch(self, day_stem: str, branch: str) -> str:
+        hidden_stems = BRANCH_HIDDEN_STEMS[branch]
+        return TEN_GODS_BY_DAY_STEM[day_stem][hidden_stems[0]]
+
+    def _nominal_age(self, birth_year: int, target_year: int | None = None) -> int:
+        year = target_year or datetime.now().year
+        return max(1, year - birth_year + 1)
 
     def _load_lunar_python(self):
         try:

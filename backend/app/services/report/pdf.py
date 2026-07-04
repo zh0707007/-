@@ -90,14 +90,28 @@ class PdfReportService:
             Paragraph("大运", heading),
             self._cycle_table(
                 chart.get("luckCycles", [])[:8],
-                ["index", "startAge", "endAge", "startYear", "endYear", "stem", "branch", "isCurrent"],
+                [
+                    "index",
+                    "directionText",
+                    "startAge",
+                    "endAge",
+                    "startYear",
+                    "endYear",
+                    "stem",
+                    "branch",
+                    "tenGodStem",
+                    "isCurrent",
+                ],
             ),
             Paragraph("流年", heading),
-            self._cycle_table(chart.get("annualCycles", [])[:11], ["year", "stem", "branch", "isCurrent"]),
+            self._cycle_table(
+                chart.get("annualCycles", [])[:11],
+                ["year", "age", "stem", "branch", "tenGodStem", "isCurrent"],
+            ),
             Paragraph("流月", heading),
             self._cycle_table(
                 chart.get("monthlyCycles", [])[:12],
-                ["index", "solarTerm", "solarTermDate", "stem", "branch", "isCurrent"],
+                ["index", "solarTerm", "solarTermDate", "stem", "branch", "tenGodStem", "isCurrent"],
             ),
         ]
 
@@ -158,15 +172,19 @@ class PdfReportService:
 
         labels = {
             "index": "序号",
+            "directionText": "顺逆",
             "startAge": "起运年龄",
             "endAge": "止运年龄",
             "startYear": "起年",
             "endYear": "止年",
             "year": "年份",
+            "age": "年龄",
             "solarTerm": "节气",
             "solarTermDate": "日期",
             "stem": "天干",
             "branch": "地支",
+            "tenGodStem": "十神",
+            "tenGodBranch": "支神",
             "isCurrent": "当前",
         }
         rows = [[labels[field] for field in fields]]
