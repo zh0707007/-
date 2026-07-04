@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -34,7 +35,7 @@ def create_app() -> FastAPI:
             code="VALIDATION_ERROR",
             message="请求参数校验失败",
             status_code=422,
-            details={"errors": exc.errors()},
+            details={"errors": jsonable_encoder(exc.errors())},
         )
 
     return app

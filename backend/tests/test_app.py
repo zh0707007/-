@@ -80,6 +80,35 @@ def test_invalid_manual_pillar():
     assert payload["error"]["code"] == "INVALID_PILLAR"
 
 
+def test_chart_request_validation_uses_unified_response():
+    response = client.post(
+        "/api/chart/calculate",
+        json={
+            "inputMode": "solar",
+            "birthInput": {
+                "name": "",
+                "gender": "male",
+                "calendarType": "solar",
+                "birthDateTime": "1990-01-01T00:00:00+08:00",
+                "birthPlace": {
+                    "province": "北京市",
+                    "city": "北京市",
+                    "latitude": 39.9042,
+                    "longitude": 116.4074,
+                    "timezone": "Asia/Shanghai",
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "VALIDATION_ERROR"
+    assert payload["error"]["details"]["errors"]
+    assert payload["requestId"].startswith("req_")
+
+
 def test_solar_chart_calculation():
     response = client.post(
         "/api/chart/calculate",
