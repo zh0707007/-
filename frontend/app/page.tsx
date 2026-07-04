@@ -14,6 +14,9 @@ const defaultPlace: BirthPlace = {
   timezone: "Asia/Shanghai"
 };
 
+const heavenlyStems = "甲乙丙丁戊己庚辛壬癸";
+const earthlyBranches = "子丑寅卯辰巳午未申酉戌亥";
+
 type PillarField = "yearPillar" | "monthPillar" | "dayPillar" | "hourPillar";
 
 export default function HomePage() {
@@ -129,9 +132,77 @@ export default function HomePage() {
     };
   }
 
+  function makeLocalError(message: string): ApiError {
+    return {
+      code: "CLIENT_VALIDATION_ERROR",
+      message,
+      details: {}
+    };
+  }
+
+  function isValidPillar(value: string) {
+    const trimmed = value.trim();
+    return (
+      trimmed.length === 2 &&
+      heavenlyStems.includes(trimmed[0]) &&
+      earthlyBranches.includes(trimmed[1])
+    );
+  }
+
+  function isSelectedPlaceCurrent() {
+    const keyword = geoKeyword.trim();
+    const placeName = selectedPlace.name ?? selectedPlace.city;
+    return Boolean(
+      keyword &&
+        (placeName === keyword ||
+          selectedPlace.city === keyword ||
+          selectedPlace.province === keyword ||
+          placeName.includes(keyword) ||
+          selectedPlace.city.includes(keyword))
+    );
+  }
+
+  function validateForm() {
+    if (!name.trim()) {
+      return makeLocalError("请输入姓名");
+    }
+
+    if (isManual) {
+      if (!isValidPillar(manualPillars.yearPillar)) {
+        return makeLocalError("请输入合法年柱，例如 甲子");
+      }
+      if (!isValidPillar(manualPillars.monthPillar)) {
+        return makeLocalError("请输入合法月柱，例如 丙寅");
+      }
+      if (!isValidPillar(manualPillars.dayPillar)) {
+        return makeLocalError("请输入合法日柱，例如 戊辰");
+      }
+      if (!unknownBirthHour && !isValidPillar(manualPillars.hourPillar)) {
+        return makeLocalError("请输入合法时柱；若不确定，请勾选不确定时辰");
+      }
+      return null;
+    }
+
+    if (!birthDateTime || Number.isNaN(new Date(birthDateTime).getTime())) {
+      return makeLocalError("请选择出生时间");
+    }
+    if (!isSelectedPlaceCurrent()) {
+      return makeLocalError("请从地区检索结果中选择出生地区");
+    }
+
+    return null;
+  }
+
   async function handleSubmit() {
-    setIsSubmitting(true);
     setError(null);
+
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setIsSubmitting(true);
     setChart(null);
     setAnalysis(null);
     setReport(null);
@@ -141,17 +212,19 @@ export default function HomePage() {
           inputMode,
           birthInput: null,
           manualBaziInput: {
-            name,
+            name: name.trim(),
             gender,
-            ...manualPillars,
-            hourPillar: unknownBirthHour ? null : manualPillars.hourPillar,
+            yearPillar: manualPillars.yearPillar.trim(),
+            monthPillar: manualPillars.monthPillar.trim(),
+            dayPillar: manualPillars.dayPillar.trim(),
+            hourPillar: unknownBirthHour ? null : manualPillars.hourPillar.trim(),
             unknownBirthHour
           }
         }
       : {
           inputMode,
           birthInput: {
-            name,
+            name: name.trim(),
             gender,
             calendarType: inputMode,
             birthDateTime: `${birthDateTime}:00+08:00`,
