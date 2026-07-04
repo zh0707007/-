@@ -60,6 +60,7 @@ class ChartCalculator:
             },
             pillars=pillars,
             warnings=["未知时辰：仅做年、月、日三柱分析"] if hour_unknown else [],
+            luck_start=self._manual_luck_start(pillars["year"]["stem"], manual.gender),
         )
 
     def _calculate_solar(self, birth: BirthInput) -> dict:
@@ -96,6 +97,7 @@ class ChartCalculator:
             warnings.append("夜子时：23:00 后按次日计算日柱")
         if birth.unknown_birth_hour:
             warnings.append("未知时辰：时柱不做强行推断")
+        direction = self._luck_direction(pillars["year"]["stem"], birth.gender)
 
         return self._build_chart(
             profile={
@@ -111,6 +113,7 @@ class ChartCalculator:
             pillars=pillars,
             warnings=warnings,
             base_year=birth_dt.year,
+            luck_start=self._luck_start_from_jie(lunar, true_solar_dt, direction),
         )
 
     def _calculate_lunar(self, birth: BirthInput) -> dict:
@@ -143,12 +146,14 @@ class ChartCalculator:
         pillars: dict,
         warnings: list[str],
         base_year: int | None = None,
+        luck_start: dict | None = None,
     ) -> dict:
         request_id = f"req_{uuid4().hex}"
         chart_id = f"chart_{uuid4().hex}"
         day_master = pillars["day"]["stem"]
         five_element_stats = self._five_element_stats(pillars)
         base_year = base_year or datetime.now().year
+        luck_start = luck_start or self._manual_luck_start(pillars["year"]["stem"], profile["gender"])
 
         return {
             "chartId": chart_id,
@@ -157,7 +162,8 @@ class ChartCalculator:
             "pillars": pillars,
             "dayMaster": day_master,
             "fiveElementStats": five_element_stats,
-            "luckCycles": self._luck_cycles(base_year, pillars, profile["gender"]),
+            "luckStart": luck_start,
+            "luckCycles": self._luck_cycles(base_year, pillars, profile["gender"], luck_start),
             "annualCycles": self._annual_cycles(base_year, day_master),
             "monthlyCycles": self._monthly_cycles(datetime.now().year, day_master),
             "warnings": warnings,
@@ -234,19 +240,26 @@ class ChartCalculator:
                 stats[STEM_ELEMENTS[hidden_stem]] += 1
         return stats
 
-    def _luck_cycles(self, base_year: int, pillars: dict, gender: str) -> list[dict]:
+    def _luck_cycles(
+        self,
+        base_year: int,
+        pillars: dict,
+        gender: str,
+        luck_start: dict,
+    ) -> list[dict]:
         day_stem = pillars["day"]["stem"]
         month_pillar = pillars["month"]
         direction = self._luck_direction(pillars["year"]["stem"], gender)
         month_index = jiazi_index(month_pillar["stem"], month_pillar["branch"]) or 0
         current_age = self._nominal_age(base_year)
+        first_start_age = luck_start["startAge"]
         cycles = []
         for index in range(8):
             step = index + 1 if direction == "forward" else -(index + 1)
             jiazi = (month_index + step) % 60
             stem = HEAVENLY_STEMS[jiazi % 10]
             branch = EARTHLY_BRANCHES[jiazi % 12]
-            start_age = index * 10 + 1
+            start_age = first_start_age + index * 10
             end_age = start_age + 9
             start_year = base_year + start_age - 1
             cycles.append(
@@ -312,6 +325,53 @@ class ChartCalculator:
         is_yang_year = year_stem in {"甲", "丙", "戊", "庚", "壬"}
         is_male = gender == "male"
         return "forward" if is_yang_year == is_male else "backward"
+
+    def _luck_start_from_jie(self, lunar, birth_dt: datetime, direction: str) -> dict:
+        jie = lunar.getNextJie() if direction == "forward" else lunar.getPrevJie()
+        jie_dt = self._solar_to_datetime(jie.getSolar(), birth_dt.tzinfo)
+        delta = abs(jie_dt - birth_dt)
+        total_days = delta.total_seconds() / 86400
+        total_months = max(0, round(total_days * 4))
+        years = total_months // 12
+        months = total_months % 12
+        start_age = max(1, years + (1 if months > 0 else 0))
+
+        return {
+            "direction": direction,
+            "directionText": "顺行" if direction == "forward" else "逆行",
+            "basisSolarTerm": jie.getName(),
+            "basisSolarTermDateTime": jie_dt.isoformat(),
+            "startAge": start_age,
+            "startAgeYears": years,
+            "startAgeMonths": months,
+            "startAgeText": f"{years}岁{months}个月起运" if months else f"{years}岁起运",
+            "isEstimated": False,
+        }
+
+    def _manual_luck_start(self, year_stem: str, gender: str) -> dict:
+        direction = self._luck_direction(year_stem, gender)
+        return {
+            "direction": direction,
+            "directionText": "顺行" if direction == "forward" else "逆行",
+            "basisSolarTerm": None,
+            "basisSolarTermDateTime": None,
+            "startAge": 1,
+            "startAgeYears": 1,
+            "startAgeMonths": 0,
+            "startAgeText": "1岁起运（手动四柱未提供出生日期，暂按估算）",
+            "isEstimated": True,
+        }
+
+    def _solar_to_datetime(self, solar, tzinfo) -> datetime:
+        return datetime(
+            solar.getYear(),
+            solar.getMonth(),
+            solar.getDay(),
+            solar.getHour(),
+            solar.getMinute(),
+            solar.getSecond(),
+            tzinfo=tzinfo,
+        )
 
     def _ten_god_for_branch(self, day_stem: str, branch: str) -> str:
         hidden_stems = BRANCH_HIDDEN_STEMS[branch]

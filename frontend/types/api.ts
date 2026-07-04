@@ -80,6 +80,18 @@ export type MonthlyCycle = {
   isCurrent: boolean;
 };
 
+export type LuckStart = {
+  direction: "forward" | "backward" | string;
+  directionText: string;
+  basisSolarTerm?: string | null;
+  basisSolarTermDateTime?: string | null;
+  startAge: number;
+  startAgeYears: number;
+  startAgeMonths: number;
+  startAgeText: string;
+  isEstimated: boolean;
+};
+
 export type BaziChart = {
   chartId: string;
   profile: {
@@ -100,6 +112,7 @@ export type BaziChart = {
   };
   dayMaster: string;
   fiveElementStats: Record<string, number>;
+  luckStart: LuckStart;
   luckCycles: LuckCycle[];
   annualCycles: AnnualCycle[];
   monthlyCycles: MonthlyCycle[];

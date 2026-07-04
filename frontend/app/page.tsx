@@ -570,6 +570,18 @@ export default function HomePage() {
             五行统计：{Object.entries(chart.fiveElementStats).map(([key, value]) => `${key}${value}`).join(" / ")}
           </div>
 
+          <div className="mt-4 rounded-md bg-black/20 p-4 text-sm leading-7 text-white/70">
+            <p>
+              起运：{chart.luckStart.directionText}，{chart.luckStart.startAgeText}
+            </p>
+            <p>
+              依据节气：
+              {chart.luckStart.basisSolarTerm
+                ? `${chart.luckStart.basisSolarTerm} ${chart.luckStart.basisSolarTermDateTime ?? ""}`
+                : "手动四柱估算"}
+            </p>
+          </div>
+
           {chart.warnings.length > 0 ? (
             <div className="mt-4 rounded-md border border-gold/30 bg-gold/10 p-4 text-sm text-gold">
               {chart.warnings.join("；")}

@@ -144,6 +144,7 @@ class PdfReportService:
             ["公历", profile.get("solarDateTime") or "未提供"],
             ["农历", profile.get("lunarDateText") or "未提供"],
             ["真太阳时", profile.get("trueSolarTime") or "未提供"],
+            ["起运", self._luck_start_text(chart)],
             [
                 "出生地",
                 f"{profile.get('birthPlaceText') or '未提供'} "
@@ -151,6 +152,12 @@ class PdfReportService:
             ],
         ]
         return self._styled_table(rows, [28 * mm, 122 * mm])
+
+    def _luck_start_text(self, chart: dict) -> str:
+        luck_start = chart.get("luckStart") or {}
+        basis = luck_start.get("basisSolarTerm")
+        basis_text = f"，依据{basis}" if basis else ""
+        return f"{luck_start.get('directionText', '')}，{luck_start.get('startAgeText', '')}{basis_text}"
 
     def _pillar_table(self, chart: dict) -> Table:
         pillars = chart["pillars"]
