@@ -20,6 +20,7 @@ export type Gender = "male" | "female";
 export type InputMode = "solar" | "lunar" | "manual";
 
 export type BirthPlace = {
+  name?: string;
   province: string;
   city: string;
   district?: string;

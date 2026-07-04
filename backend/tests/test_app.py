@@ -16,6 +16,16 @@ def test_geo_search_scaffold_response():
     assert payload["requestId"].startswith("req_")
 
 
+def test_geo_search_rejects_empty_keyword():
+    response = client.get("/api/geo/search", params={"keyword": ""})
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "VALIDATION_ERROR"
+    assert payload["requestId"].startswith("req_")
+
+
 def test_manual_chart_calculation():
     response = client.post(
         "/api/chart/calculate",

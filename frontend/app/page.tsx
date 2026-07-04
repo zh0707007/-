@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { apiRequest } from "@/lib/api/client";
-import type { AnalysisResult, ApiError, BaziChart, Gender, InputMode, PdfReport } from "@/types/api";
+import type { AnalysisResult, ApiError, BaziChart, BirthPlace, Gender, InputMode, PdfReport } from "@/types/api";
 
-const defaultPlace = {
+const defaultPlace: BirthPlace = {
+  name: "北京市",
   province: "北京市",
   city: "北京市",
   latitude: 39.9042,
@@ -20,7 +21,13 @@ export default function HomePage() {
   const [gender, setGender] = useState<Gender>("male");
   const [inputMode, setInputMode] = useState<InputMode>("solar");
   const [birthDateTime, setBirthDateTime] = useState("1990-01-01T00:00");
+  const [isLeapMonth, setIsLeapMonth] = useState(false);
   const [unknownBirthHour, setUnknownBirthHour] = useState(false);
+  const [geoKeyword, setGeoKeyword] = useState(defaultPlace.name ?? defaultPlace.city);
+  const [selectedPlace, setSelectedPlace] = useState<BirthPlace>(defaultPlace);
+  const [geoResults, setGeoResults] = useState<BirthPlace[]>([]);
+  const [geoMessage, setGeoMessage] = useState("");
+  const [isSearchingGeo, setIsSearchingGeo] = useState(false);
   const [manualPillars, setManualPillars] = useState({
     yearPillar: "己巳",
     monthPillar: "丙子",
@@ -41,17 +48,85 @@ export default function HomePage() {
     if (Number.isNaN(parsed.getTime())) {
       return "待计算";
     }
-    const offsetMinutes = (defaultPlace.longitude - 120) * 4;
+    const offsetMinutes = (selectedPlace.longitude - 120) * 4;
     return new Date(parsed.getTime() + offsetMinutes * 60 * 1000).toLocaleString("zh-CN", {
       hour12: false
     });
-  }, [birthDateTime]);
+  }, [birthDateTime, selectedPlace.longitude]);
+
+  useEffect(() => {
+    if (isManual) {
+      setGeoResults([]);
+      setGeoMessage("");
+      return;
+    }
+
+    const keyword = geoKeyword.trim();
+    if (!keyword) {
+      setIsSearchingGeo(false);
+      setGeoResults([]);
+      setGeoMessage("请输入出生城市");
+      return;
+    }
+
+    let isActive = true;
+    setIsSearchingGeo(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await apiRequest<BirthPlace[]>(
+          `/geo/search?keyword=${encodeURIComponent(keyword)}`
+        );
+        if (!isActive) {
+          return;
+        }
+        if (result.success) {
+          setGeoResults(result.data);
+          setGeoMessage("");
+        } else {
+          setGeoResults([]);
+          setGeoMessage(result.error.message);
+        }
+      } catch {
+        if (isActive) {
+          setGeoResults([]);
+          setGeoMessage("地区检索暂不可用");
+        }
+      } finally {
+        if (isActive) {
+          setIsSearchingGeo(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timer);
+    };
+  }, [geoKeyword, isManual]);
 
   function updatePillar(field: PillarField, value: string) {
     setManualPillars((current) => ({
       ...current,
       [field]: value
     }));
+  }
+
+  function selectPlace(place: BirthPlace) {
+    setSelectedPlace(place);
+    setGeoKeyword(place.name ?? place.city);
+    setGeoResults([]);
+    setGeoMessage("");
+  }
+
+  function birthPlaceForRequest(place: BirthPlace) {
+    return {
+      province: place.province,
+      city: place.city,
+      district: place.district,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      timezone: place.timezone
+    };
   }
 
   async function handleSubmit() {
@@ -80,8 +155,8 @@ export default function HomePage() {
             gender,
             calendarType: inputMode,
             birthDateTime: `${birthDateTime}:00+08:00`,
-            isLeapMonth: false,
-            birthPlace: defaultPlace,
+            isLeapMonth: inputMode === "lunar" ? isLeapMonth : false,
+            birthPlace: birthPlaceForRequest(selectedPlace),
             unknownBirthHour
           },
           manualBaziInput: null
@@ -284,12 +359,52 @@ export default function HomePage() {
                   type="datetime-local"
                   value={birthDateTime}
                 />
+                {inputMode === "lunar" ? (
+                  <label className="mt-3 flex items-center gap-3 text-sm text-white/70">
+                    <input
+                      checked={isLeapMonth}
+                      className="h-4 w-4 accent-gold"
+                      onChange={(event) => setIsLeapMonth(event.target.checked)}
+                      type="checkbox"
+                    />
+                    闰月
+                  </label>
+                ) : null}
               </div>
-              <div>
+              <div className="relative">
                 <label className="mb-2 block text-sm text-white/70">出生地区</label>
-                <div className="h-12 rounded-md border border-white/10 bg-black/20 px-4 py-3 text-white/70">
-                  北京市 北京时间
-                </div>
+                <input
+                  className="h-12 w-full rounded-md border border-white/10 bg-black/20 px-4 text-white outline-none focus:border-gold"
+                  maxLength={30}
+                  onChange={(event) => setGeoKeyword(event.target.value)}
+                  placeholder="输入城市，如 北京、成都"
+                  value={geoKeyword}
+                />
+                <p className="mt-2 text-xs text-white/45">
+                  当前：{selectedPlace.name ?? selectedPlace.city}，{selectedPlace.timezone}
+                </p>
+                {geoResults.length > 0 ? (
+                  <div className="absolute left-0 right-0 z-10 mt-2 overflow-hidden rounded-md border border-white/10 bg-[#121212] shadow-2xl">
+                    {geoResults.map((place) => (
+                      <button
+                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm text-white/75 hover:bg-gold/10 hover:text-gold"
+                        key={`${place.province}-${place.city}-${place.name ?? place.city}`}
+                        onClick={() => selectPlace(place)}
+                        type="button"
+                      >
+                        <span>{place.name ?? place.city}</span>
+                        <span className="text-xs text-white/40">
+                          {place.latitude.toFixed(2)}, {place.longitude.toFixed(2)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {geoMessage || isSearchingGeo ? (
+                  <p className="mt-2 text-xs text-gold">
+                    {isSearchingGeo ? "检索中..." : geoMessage}
+                  </p>
+                ) : null}
               </div>
             </div>
           )}
@@ -307,7 +422,7 @@ export default function HomePage() {
           <div className="rounded-md bg-black/20 p-4 text-sm leading-7 text-white/50">
             <p>真太阳时：{isManual ? "四柱模式不计算" : trueSolarPreview}</p>
             <p>
-              地址经纬：北纬 {defaultPlace.latitude} 东经 {defaultPlace.longitude}
+              地址经纬：北纬 {selectedPlace.latitude} 东经 {selectedPlace.longitude}
             </p>
           </div>
 

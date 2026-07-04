@@ -2,9 +2,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+from app.api.responses import error_response
 from app.core.config import settings
 from app.db.session import init_db
 
@@ -25,6 +27,15 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(api_router, prefix="/api")
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request, exc):
+        return error_response(
+            code="VALIDATION_ERROR",
+            message="请求参数校验失败",
+            status_code=422,
+            details={"errors": exc.errors()},
+        )
 
     return app
 

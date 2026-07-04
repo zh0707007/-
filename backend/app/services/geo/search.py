@@ -15,4 +15,4 @@ class GeoSearchService:
             if normalized in city["name"]
             or normalized in city["province"]
             or normalized in city["city"]
-        ]
+        ][:10]
