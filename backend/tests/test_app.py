@@ -213,6 +213,25 @@ def test_pdf_report_generation_and_download():
     assert download_response.content.startswith(b"%PDF")
 
 
+def test_pdf_report_generation_with_chart_warnings():
+    chart = _create_manual_chart(unknown_birth_hour=True)
+    analysis_response = client.post(
+        "/api/analysis/generate",
+        json={"chartId": chart["chartId"], "analysisOptions": {}},
+    )
+    analysis = analysis_response.json()["data"]
+
+    response = client.post(
+        "/api/report/pdf",
+        json={"chartId": chart["chartId"], "analysisId": analysis["analysisId"]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["status"] == "ready"
+
+
 def test_analysis_chart_not_found():
     response = client.post(
         "/api/analysis/generate",
@@ -225,7 +244,7 @@ def test_analysis_chart_not_found():
     assert payload["error"]["code"] == "CHART_NOT_FOUND"
 
 
-def _create_manual_chart() -> dict:
+def _create_manual_chart(unknown_birth_hour: bool = False) -> dict:
     response = client.post(
         "/api/chart/calculate",
         json={
@@ -237,8 +256,8 @@ def _create_manual_chart() -> dict:
                 "yearPillar": "己巳",
                 "monthPillar": "丙子",
                 "dayPillar": "丙寅",
-                "hourPillar": "戊子",
-                "unknownBirthHour": False,
+                "hourPillar": None if unknown_birth_hour else "戊子",
+                "unknownBirthHour": unknown_birth_hour,
             },
         },
     )

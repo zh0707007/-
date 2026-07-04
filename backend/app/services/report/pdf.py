@@ -88,10 +88,24 @@ class PdfReportService:
             Paragraph("五行统计", heading),
             Paragraph(self._five_element_text(chart), body),
             Paragraph("大运", heading),
-            self._cycle_table(chart.get("luckCycles", [])[:8], ["index", "startYear", "endYear", "stem", "branch"]),
+            self._cycle_table(
+                chart.get("luckCycles", [])[:8],
+                ["index", "startAge", "endAge", "startYear", "endYear", "stem", "branch", "isCurrent"],
+            ),
             Paragraph("流年", heading),
             self._cycle_table(chart.get("annualCycles", [])[:11], ["year", "stem", "branch", "isCurrent"]),
+            Paragraph("流月", heading),
+            self._cycle_table(
+                chart.get("monthlyCycles", [])[:12],
+                ["index", "solarTerm", "solarTermDate", "stem", "branch", "isCurrent"],
+            ),
         ]
+
+        warnings = [*chart.get("warnings", []), *analysis.get("warnings", [])]
+        if warnings:
+            story.append(Paragraph("提示信息", heading))
+            for warning in dict.fromkeys(warnings):
+                story.append(Paragraph(self._text(f"· {warning}"), body))
 
         for section in analysis.get("sections", []):
             story.append(Paragraph(self._text(section.get("title", "综合解读")), heading))
@@ -144,34 +158,48 @@ class PdfReportService:
 
         labels = {
             "index": "序号",
+            "startAge": "起运年龄",
+            "endAge": "止运年龄",
             "startYear": "起年",
             "endYear": "止年",
             "year": "年份",
+            "solarTerm": "节气",
+            "solarTermDate": "日期",
             "stem": "天干",
             "branch": "地支",
             "isCurrent": "当前",
         }
         rows = [[labels[field] for field in fields]]
+        current_rows = []
         for item in items:
             rows.append([self._format_cell(item.get(field)) for field in fields])
-        return self._styled_table(rows, [150 * mm / len(fields)] * len(fields))
+            if item.get("isCurrent"):
+                current_rows.append(len(rows) - 1)
+        return self._styled_table(rows, [150 * mm / len(fields)] * len(fields), current_rows=current_rows)
 
-    def _styled_table(self, rows: list[list], col_widths: list[float]) -> Table:
+    def _styled_table(
+        self,
+        rows: list[list],
+        col_widths: list[float],
+        current_rows: list[int] | None = None,
+    ) -> Table:
         table = Table(rows, colWidths=col_widths, hAlign="LEFT", repeatRows=1)
+        commands = [
+            ("FONTNAME", (0, 0), (-1, -1), "STSong-Light"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3efe3")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#c9bfa5")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]
+        for row_index in current_rows or []:
+            commands.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#fff3cf")))
+            commands.append(("TEXTCOLOR", (0, row_index), (-1, row_index), colors.HexColor("#6f4f00")))
         table.setStyle(
-            TableStyle(
-                [
-                    ("FONTNAME", (0, 0), (-1, -1), "STSong-Light"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 9),
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3efe3")),
-                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#c9bfa5")),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ("TOPPADDING", (0, 0), (-1, -1), 5),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ]
-            )
+            TableStyle(commands)
         )
         return table
 
