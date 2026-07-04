@@ -65,16 +65,19 @@ class ChartCalculator:
 
     def _calculate_solar(self, birth: BirthInput) -> dict:
         Solar, _ = self._load_lunar_python()
-        birth_dt = self._parse_datetime(birth.birth_date_time)
-        true_solar_dt = self._true_solar_time(birth_dt, birth.birth_place.longitude)
-        lunar = Solar.fromYmdHms(
-            true_solar_dt.year,
-            true_solar_dt.month,
-            true_solar_dt.day,
-            true_solar_dt.hour,
-            true_solar_dt.minute,
-            true_solar_dt.second,
-        ).getLunar()
+        try:
+            birth_dt = self._parse_datetime(birth.birth_date_time)
+            true_solar_dt = self._true_solar_time(birth_dt, birth.birth_place.longitude)
+            lunar = Solar.fromYmdHms(
+                true_solar_dt.year,
+                true_solar_dt.month,
+                true_solar_dt.day,
+                true_solar_dt.hour,
+                true_solar_dt.minute,
+                true_solar_dt.second,
+            ).getLunar()
+        except (ValueError, TypeError) as exc:
+            raise ChartCalculationError("CALENDAR_CONVERT_ERROR", "出生时间格式不合法，无法换算历法") from exc
 
         year_gz = lunar.getYearInGanZhiExact()
         month_gz = lunar.getMonthInGanZhiExact()
@@ -118,18 +121,21 @@ class ChartCalculator:
 
     def _calculate_lunar(self, birth: BirthInput) -> dict:
         _, Lunar = self._load_lunar_python()
-        birth_dt = self._parse_datetime(birth.birth_date_time)
-        lunar_month = -birth_dt.month if birth.is_leap_month else birth_dt.month
-        lunar = Lunar.fromYmdHms(
-            birth_dt.year,
-            lunar_month,
-            birth_dt.day,
-            birth_dt.hour,
-            birth_dt.minute,
-            birth_dt.second,
-        )
-        solar = lunar.getSolar()
-        solar_dt = birth_dt.replace(year=solar.getYear(), month=solar.getMonth(), day=solar.getDay())
+        try:
+            birth_dt = self._parse_datetime(birth.birth_date_time)
+            lunar_month = -birth_dt.month if birth.is_leap_month else birth_dt.month
+            lunar = Lunar.fromYmdHms(
+                birth_dt.year,
+                lunar_month,
+                birth_dt.day,
+                birth_dt.hour,
+                birth_dt.minute,
+                birth_dt.second,
+            )
+            solar = lunar.getSolar()
+            solar_dt = birth_dt.replace(year=solar.getYear(), month=solar.getMonth(), day=solar.getDay())
+        except (ValueError, TypeError) as exc:
+            raise ChartCalculationError("CALENDAR_CONVERT_ERROR", "农历日期不合法，无法换算公历") from exc
         solar_birth = birth.model_copy(
             update={
                 "calendar_type": "solar",
@@ -302,24 +308,33 @@ class ChartCalculator:
 
     def _monthly_cycles(self, year: int, day_stem: str) -> list[dict]:
         solar_terms = ["立春", "惊蛰", "清明", "立夏", "芒种", "小暑", "立秋", "白露", "寒露", "立冬", "大雪", "小寒"]
+        term_months = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1]
+        current_index = self._current_monthly_cycle_index(datetime.now())
         cycles = []
         for index, term in enumerate(solar_terms):
             stem = HEAVENLY_STEMS[(year + index) % 10]
             branch = EARTHLY_BRANCHES[(index + 2) % 12]
+            month = term_months[index]
+            term_year = year + 1 if month == 1 else year
             cycles.append(
                 {
                     "index": index + 1,
                     "solarTerm": term,
-                    "solarTermDate": f"{year}-{index + 2:02d}-01",
+                    "solarTermDate": f"{term_year}-{month:02d}-01",
                     "stem": stem,
                     "branch": branch,
                     "tenGodStem": TEN_GODS_BY_DAY_STEM[day_stem][stem],
                     "tenGodBranch": self._ten_god_for_branch(day_stem, branch),
                     "relationSummary": "",
-                    "isCurrent": index == datetime.now().month - 1,
+                    "isCurrent": index == current_index,
                 }
             )
         return cycles
+
+    def _current_monthly_cycle_index(self, current_dt: datetime) -> int:
+        if current_dt.month == 1:
+            return 11
+        return current_dt.month - 2
 
     def _luck_direction(self, year_stem: str, gender: str) -> str:
         is_yang_year = year_stem in {"甲", "丙", "戊", "庚", "壬"}

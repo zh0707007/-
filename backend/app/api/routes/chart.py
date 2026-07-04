@@ -17,7 +17,7 @@ def calculate_chart(payload: ChartCalculateRequest, db: Session = Depends(get_db
     try:
         chart = calculator.calculate(payload)
     except ChartCalculationError as exc:
-        status_code = 400 if exc.code in {"VALIDATION_ERROR", "INVALID_PILLAR"} else 500
+        status_code = 400 if exc.code in {"VALIDATION_ERROR", "INVALID_PILLAR", "CALENDAR_CONVERT_ERROR"} else 500
         return error_response(exc.code, exc.message, status_code=status_code)
 
     chart_request = ChartRequest(

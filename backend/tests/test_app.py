@@ -60,6 +60,8 @@ def test_manual_chart_calculation():
     assert payload["data"]["annualCycles"][5]["age"]
     assert payload["data"]["annualCycles"][5]["tenGodStem"]
     assert payload["data"]["monthlyCycles"][0]["tenGodStem"]
+    assert all("-13-" not in item["solarTermDate"] for item in payload["data"]["monthlyCycles"])
+    assert sum(1 for item in payload["data"]["monthlyCycles"] if item["isCurrent"]) == 1
     assert payload["data"]["requestId"].startswith("req_")
 
 
@@ -112,6 +114,60 @@ def test_chart_request_validation_uses_unified_response():
     assert payload["error"]["code"] == "VALIDATION_ERROR"
     assert payload["error"]["details"]["errors"]
     assert payload["requestId"].startswith("req_")
+
+
+def test_solar_calendar_convert_error():
+    response = client.post(
+        "/api/chart/calculate",
+        json={
+            "inputMode": "solar",
+            "birthInput": {
+                "name": "张三",
+                "gender": "male",
+                "calendarType": "solar",
+                "birthDateTime": "not-a-date",
+                "birthPlace": {
+                    "province": "北京市",
+                    "city": "北京市",
+                    "latitude": 39.9042,
+                    "longitude": 116.4074,
+                    "timezone": "Asia/Shanghai",
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "CALENDAR_CONVERT_ERROR"
+
+
+def test_lunar_calendar_convert_error():
+    response = client.post(
+        "/api/chart/calculate",
+        json={
+            "inputMode": "lunar",
+            "birthInput": {
+                "name": "张三",
+                "gender": "male",
+                "calendarType": "lunar",
+                "birthDateTime": "1989-13-40T00:00:00+08:00",
+                "birthPlace": {
+                    "province": "北京市",
+                    "city": "北京市",
+                    "latitude": 39.9042,
+                    "longitude": 116.4074,
+                    "timezone": "Asia/Shanghai",
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "CALENDAR_CONVERT_ERROR"
 
 
 def test_get_chart_by_id():

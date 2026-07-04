@@ -79,7 +79,7 @@ class LlmClient:
             ],
         )
         content = response.choices[0].message.content or "{}"
-        parsed = json.loads(content)
+        parsed = self._parse_json_content(content)
         return self._normalize_result(
             chart=chart,
             model_name=settings.llm_model,
@@ -89,6 +89,25 @@ class LlmClient:
             image_prompt_summary=parsed.get("imagePromptSummary", ""),
             warnings=[],
         )
+
+    def _parse_json_content(self, content: str) -> dict:
+        stripped = content.strip()
+        if stripped.startswith("```"):
+            lines = stripped.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            stripped = "\n".join(lines).strip()
+
+        if not stripped.startswith("{"):
+            start = stripped.find("{")
+            end = stripped.rfind("}")
+            if start >= 0 and end > start:
+                stripped = stripped[start : end + 1]
+
+        parsed = json.loads(stripped)
+        return parsed if isinstance(parsed, dict) else {}
 
     def _fallback_analysis(self, chart: dict, options: AnalysisOptions, warning: str) -> dict:
         pillars = chart["pillars"]

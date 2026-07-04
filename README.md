@@ -69,4 +69,4 @@ pytest
 - `POST /api/report/pdf` 已支持服务端生成 PDF，包含四柱、大运、流年、流月、提示信息和免责声明，并通过下载接口返回报告文件。
 - `GET /api/report/{reportId}` 和 `GET /api/report/chart/{chartId}/latest` 已支持读取 PDF 报告元数据。
 - 前端首页已接入排盘、AI 解读和“下载 PDF 报告”主流程。
-- 后端已为参数校验错误提供统一响应格式。
+- 后端已为参数校验、历法转换、LLM 超时、PDF 下载等核心错误场景提供统一响应格式和测试覆盖。

@@ -309,7 +309,12 @@ export default function HomePage() {
     setIsGeneratingReport(true);
     setError(null);
     try {
-      const currentAnalysis = analysis ?? (await generateAnalysis(chart));
+      let currentAnalysis = analysis;
+      if (!currentAnalysis) {
+        setIsAnalyzing(true);
+        currentAnalysis = await generateAnalysis(chart);
+        setIsAnalyzing(false);
+      }
       if (!currentAnalysis) {
         return;
       }
@@ -337,6 +342,7 @@ export default function HomePage() {
       });
     } finally {
       setIsGeneratingReport(false);
+      setIsAnalyzing(false);
     }
   }
 
@@ -711,7 +717,7 @@ export default function HomePage() {
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <button
               className="h-12 rounded-md border border-gold/40 text-gold disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isAnalyzing}
+              disabled={isAnalyzing || isGeneratingReport}
               onClick={handleGenerateAnalysis}
               type="button"
             >
@@ -719,7 +725,7 @@ export default function HomePage() {
             </button>
             <button
               className="h-12 rounded-md bg-gold font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isGeneratingReport}
+              disabled={isGeneratingReport || isAnalyzing}
               onClick={handleGenerateReport}
               type="button"
             >

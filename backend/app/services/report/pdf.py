@@ -200,7 +200,28 @@ class PdfReportService:
             rows.append([self._format_cell(item.get(field)) for field in fields])
             if item.get("isCurrent"):
                 current_rows.append(len(rows) - 1)
-        return self._styled_table(rows, [150 * mm / len(fields)] * len(fields), current_rows=current_rows)
+        return self._styled_table(rows, self._cycle_col_widths(fields), current_rows=current_rows)
+
+    def _cycle_col_widths(self, fields: list[str]) -> list[float]:
+        weights = {
+            "index": 0.7,
+            "directionText": 0.8,
+            "startAge": 1.0,
+            "endAge": 1.0,
+            "startYear": 1.1,
+            "endYear": 1.1,
+            "year": 1.1,
+            "age": 0.8,
+            "solarTerm": 1.0,
+            "solarTermDate": 1.4,
+            "stem": 0.8,
+            "branch": 0.8,
+            "tenGodStem": 1.0,
+            "tenGodBranch": 1.0,
+            "isCurrent": 0.8,
+        }
+        total = sum(weights.get(field, 1.0) for field in fields)
+        return [150 * mm * weights.get(field, 1.0) / total for field in fields]
 
     def _styled_table(
         self,
@@ -223,9 +244,7 @@ class PdfReportService:
         for row_index in current_rows or []:
             commands.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#fff3cf")))
             commands.append(("TEXTCOLOR", (0, row_index), (-1, row_index), colors.HexColor("#6f4f00")))
-        table.setStyle(
-            TableStyle(commands)
-        )
+        table.setStyle(TableStyle(commands))
         return table
 
     def _footer(self, canvas, doc) -> None:
