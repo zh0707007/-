@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.responses import error_response, success_response
@@ -15,6 +16,18 @@ from app.services.report.pdf import PdfReportService
 
 router = APIRouter()
 pdf_service = PdfReportService()
+
+
+def report_payload(report_record: PdfReport) -> dict:
+    return {
+        "reportId": report_record.id,
+        "chartId": report_record.chart_id,
+        "analysisId": report_record.analysis_id,
+        "fileName": report_record.file_name,
+        "downloadUrl": report_record.download_url,
+        "expiresAt": report_record.expires_at.isoformat() if report_record.expires_at else None,
+        "status": report_record.status,
+    }
 
 
 @router.post("/pdf")
@@ -45,17 +58,34 @@ def generate_pdf_report(payload: PdfReportRequest, db: Session = Depends(get_db)
     db.add(report_record)
     db.commit()
 
-    return success_response(
-        {
-            "reportId": report["reportId"],
-            "chartId": report["chartId"],
-            "analysisId": report["analysisId"],
-            "fileName": report["fileName"],
-            "downloadUrl": report["downloadUrl"],
-            "expiresAt": report["expiresAt"],
-            "status": report["status"],
-        }
-    )
+    return success_response(report_payload(report_record))
+
+
+@router.get("/chart/{chart_id}/latest")
+def get_latest_pdf_report(chart_id: str, db: Session = Depends(get_db)):
+    chart_record = db.get(Chart, chart_id)
+    if chart_record is None:
+        return error_response("CHART_NOT_FOUND", "未找到对应命盘", status_code=404)
+
+    report_record = db.scalars(
+        select(PdfReport)
+        .where(PdfReport.chart_id == chart_id)
+        .order_by(PdfReport.created_at.desc())
+        .limit(1)
+    ).first()
+    if report_record is None:
+        return error_response("REPORT_NOT_FOUND", "未找到对应 PDF 报告", status_code=404)
+
+    return success_response(report_payload(report_record))
+
+
+@router.get("/{report_id}")
+def get_pdf_report(report_id: str, db: Session = Depends(get_db)):
+    report_record = db.get(PdfReport, report_id)
+    if report_record is None:
+        return error_response("REPORT_NOT_FOUND", "未找到对应 PDF 报告", status_code=404)
+
+    return success_response(report_payload(report_record))
 
 
 @router.get("/download/{report_id}")

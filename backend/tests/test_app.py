@@ -114,6 +114,27 @@ def test_chart_request_validation_uses_unified_response():
     assert payload["requestId"].startswith("req_")
 
 
+def test_get_chart_by_id():
+    chart = _create_manual_chart()
+
+    response = client.get(f"/api/chart/{chart['chartId']}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["chartId"] == chart["chartId"]
+    assert payload["data"]["pillars"]["day"]["tenGod"] == "日主"
+
+
+def test_get_chart_not_found():
+    response = client.get("/api/chart/chart_missing")
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "CHART_NOT_FOUND"
+
+
 def test_solar_chart_calculation():
     response = client.post(
         "/api/chart/calculate",
@@ -280,17 +301,7 @@ def test_get_analysis_not_found():
 
 
 def test_pdf_report_generation_and_download():
-    chart = _create_manual_chart()
-    analysis_response = client.post(
-        "/api/analysis/generate",
-        json={"chartId": chart["chartId"], "analysisOptions": {}},
-    )
-    analysis = analysis_response.json()["data"]
-
-    response = client.post(
-        "/api/report/pdf",
-        json={"chartId": chart["chartId"], "analysisId": analysis["analysisId"]},
-    )
+    chart, analysis, response = _create_pdf_report()
 
     assert response.status_code == 200
     payload = response.json()
@@ -302,6 +313,22 @@ def test_pdf_report_generation_and_download():
     assert download_response.status_code == 200
     assert download_response.headers["content-type"] == "application/pdf"
     assert download_response.content.startswith(b"%PDF")
+    assert payload["data"]["chartId"] == chart["chartId"]
+    assert payload["data"]["analysisId"] == analysis["analysisId"]
+
+
+def test_get_pdf_report_by_id_and_latest_for_chart():
+    chart, analysis, report_response = _create_pdf_report()
+    report = report_response.json()["data"]
+
+    by_id_response = client.get(f"/api/report/{report['reportId']}")
+    latest_response = client.get(f"/api/report/chart/{chart['chartId']}/latest")
+
+    assert by_id_response.status_code == 200
+    assert latest_response.status_code == 200
+    assert by_id_response.json()["data"]["reportId"] == report["reportId"]
+    assert latest_response.json()["data"]["analysisId"] == analysis["analysisId"]
+    assert "filePath" not in by_id_response.json()["data"]
 
 
 def test_pdf_report_generation_with_chart_warnings():
@@ -391,6 +418,20 @@ def _create_manual_chart(unknown_birth_hour: bool = False) -> dict:
     )
     assert response.status_code == 200
     return response.json()["data"]
+
+
+def _create_pdf_report() -> tuple[dict, dict, object]:
+    chart = _create_manual_chart()
+    analysis_response = client.post(
+        "/api/analysis/generate",
+        json={"chartId": chart["chartId"], "analysisOptions": {}},
+    )
+    analysis = analysis_response.json()["data"]
+    report_response = client.post(
+        "/api/report/pdf",
+        json={"chartId": chart["chartId"], "analysisId": analysis["analysisId"]},
+    )
+    return chart, analysis, report_response
 
 
 def _insert_report_record(report_id: str, expires_at: datetime) -> None:
