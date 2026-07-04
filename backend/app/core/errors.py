@@ -14,4 +14,6 @@ class ErrorCode(StrEnum):
     analysis_generation_error = "ANALYSIS_GENERATION_ERROR"
     analysis_not_found = "ANALYSIS_NOT_FOUND"
     pdf_render_error = "PDF_RENDER_ERROR"
+    report_not_found = "REPORT_NOT_FOUND"
+    report_expired = "REPORT_EXPIRED"
     report_storage_error = "REPORT_STORAGE_ERROR"

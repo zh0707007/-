@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { apiRequest } from "@/lib/api/client";
-import type { ApiError, BaziChart, Gender, InputMode } from "@/types/api";
+import type { AnalysisResult, ApiError, BaziChart, Gender, InputMode, PdfReport } from "@/types/api";
 
 const defaultPlace = {
   province: "北京市",
@@ -28,8 +28,12 @@ export default function HomePage() {
     hourPillar: "戊子"
   });
   const [chart, setChart] = useState<BaziChart | null>(null);
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [report, setReport] = useState<PdfReport | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   const isManual = inputMode === "manual";
   const trueSolarPreview = useMemo(() => {
@@ -54,6 +58,8 @@ export default function HomePage() {
     setIsSubmitting(true);
     setError(null);
     setChart(null);
+    setAnalysis(null);
+    setReport(null);
 
     const payload = isManual
       ? {
@@ -100,6 +106,91 @@ export default function HomePage() {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function generateAnalysis(currentChart: BaziChart) {
+    const result = await apiRequest<AnalysisResult>("/analysis/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        chartId: currentChart.chartId,
+        analysisOptions: {
+          includeCareer: true,
+          includeWealth: true,
+          includeRelationship: true,
+          includeHealth: true,
+          includeHistoryCalibration: false,
+          yearsToLookAhead: 3
+        }
+      })
+    });
+
+    if (!result.success) {
+      setError(result.error);
+      return null;
+    }
+
+    setAnalysis(result.data);
+    return result.data;
+  }
+
+  async function handleGenerateAnalysis() {
+    if (!chart) {
+      return;
+    }
+    setIsAnalyzing(true);
+    setError(null);
+    try {
+      await generateAnalysis(chart);
+    } catch {
+      setError({
+        code: "NETWORK_ERROR",
+        message: "无法生成 AI 解读，请确认后端服务已启动。",
+        details: {}
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
+
+  async function handleGenerateReport() {
+    if (!chart) {
+      return;
+    }
+
+    setIsGeneratingReport(true);
+    setError(null);
+    try {
+      const currentAnalysis = analysis ?? (await generateAnalysis(chart));
+      if (!currentAnalysis) {
+        return;
+      }
+
+      const result = await apiRequest<PdfReport>("/report/pdf", {
+        method: "POST",
+        body: JSON.stringify({
+          chartId: chart.chartId,
+          analysisId: currentAnalysis.analysisId
+        })
+      });
+
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      setReport(result.data);
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api";
+      const origin = apiBase.replace(/\/api\/?$/, "");
+      window.open(`${origin}${result.data.downloadUrl}`, "_blank", "noopener,noreferrer");
+    } catch {
+      setError({
+        code: "NETWORK_ERROR",
+        message: "无法生成 PDF 报告，请确认后端服务已启动。",
+        details: {}
+      });
+    } finally {
+      setIsGeneratingReport(false);
     }
   }
 
@@ -294,6 +385,146 @@ export default function HomePage() {
           {chart.warnings.length > 0 ? (
             <div className="mt-4 rounded-md border border-gold/30 bg-gold/10 p-4 text-sm text-gold">
               {chart.warnings.join("；")}
+            </div>
+          ) : null}
+
+          <div className="mt-5 space-y-5">
+            <div>
+              <h3 className="mb-3 text-lg font-semibold">大运</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] border-collapse text-center text-sm">
+                  <thead className="text-white/50">
+                    <tr>
+                      <th className="border border-white/10 p-3">序号</th>
+                      <th className="border border-white/10 p-3">年龄</th>
+                      <th className="border border-white/10 p-3">年份</th>
+                      <th className="border border-white/10 p-3">天干</th>
+                      <th className="border border-white/10 p-3">地支</th>
+                      <th className="border border-white/10 p-3">当前</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chart.luckCycles.map((cycle) => (
+                      <tr className={cycle.isCurrent ? "bg-gold/10 text-gold" : ""} key={cycle.index}>
+                        <td className="border border-white/10 p-3">{cycle.index}</td>
+                        <td className="border border-white/10 p-3">
+                          {cycle.startAge}-{cycle.endAge}
+                        </td>
+                        <td className="border border-white/10 p-3">
+                          {cycle.startYear}-{cycle.endYear}
+                        </td>
+                        <td className="border border-white/10 p-3">{cycle.stem}</td>
+                        <td className="border border-white/10 p-3">{cycle.branch}</td>
+                        <td className="border border-white/10 p-3">{cycle.isCurrent ? "是" : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-3 text-lg font-semibold">流年</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] border-collapse text-center text-sm">
+                  <thead className="text-white/50">
+                    <tr>
+                      <th className="border border-white/10 p-3">年份</th>
+                      <th className="border border-white/10 p-3">天干</th>
+                      <th className="border border-white/10 p-3">地支</th>
+                      <th className="border border-white/10 p-3">当前</th>
+                      <th className="border border-white/10 p-3">提示</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chart.annualCycles.map((cycle) => (
+                      <tr className={cycle.isCurrent ? "bg-gold/10 text-gold" : ""} key={cycle.year}>
+                        <td className="border border-white/10 p-3">{cycle.year}</td>
+                        <td className="border border-white/10 p-3">{cycle.stem}</td>
+                        <td className="border border-white/10 p-3">{cycle.branch}</td>
+                        <td className="border border-white/10 p-3">{cycle.isCurrent ? "是" : ""}</td>
+                        <td className="border border-white/10 p-3">{cycle.relationSummary || "待解读"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-3 text-lg font-semibold">流月</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] border-collapse text-center text-sm">
+                  <thead className="text-white/50">
+                    <tr>
+                      <th className="border border-white/10 p-3">序号</th>
+                      <th className="border border-white/10 p-3">节气</th>
+                      <th className="border border-white/10 p-3">日期</th>
+                      <th className="border border-white/10 p-3">天干</th>
+                      <th className="border border-white/10 p-3">地支</th>
+                      <th className="border border-white/10 p-3">当前</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chart.monthlyCycles.map((cycle) => (
+                      <tr className={cycle.isCurrent ? "bg-gold/10 text-gold" : ""} key={cycle.index}>
+                        <td className="border border-white/10 p-3">{cycle.index}</td>
+                        <td className="border border-white/10 p-3">{cycle.solarTerm}</td>
+                        <td className="border border-white/10 p-3">{cycle.solarTermDate}</td>
+                        <td className="border border-white/10 p-3">{cycle.stem}</td>
+                        <td className="border border-white/10 p-3">{cycle.branch}</td>
+                        <td className="border border-white/10 p-3">{cycle.isCurrent ? "是" : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <button
+              className="h-12 rounded-md border border-gold/40 text-gold disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isAnalyzing}
+              onClick={handleGenerateAnalysis}
+              type="button"
+            >
+              {isAnalyzing ? "解读生成中..." : "生成 AI 解读"}
+            </button>
+            <button
+              className="h-12 rounded-md bg-gold font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isGeneratingReport}
+              onClick={handleGenerateReport}
+              type="button"
+            >
+              {isGeneratingReport ? "PDF 生成中..." : "下载 PDF 报告"}
+            </button>
+          </div>
+
+          {analysis ? (
+            <div className="mt-5 space-y-4 rounded-md bg-black/20 p-4 text-sm leading-7 text-white/70">
+              <div>
+                <p className="text-gold">
+                  {analysis.status === "fallback" ? "本地摘要解读" : "AI 解读"}
+                </p>
+                <p>{analysis.summary}</p>
+              </div>
+              {analysis.sections.map((section) => (
+                <div key={section.title}>
+                  <h3 className="mb-1 font-semibold text-white">{section.title}</h3>
+                  <p>{section.content}</p>
+                </div>
+              ))}
+              {analysis.warnings.length > 0 ? (
+                <p className="text-gold">{analysis.warnings.join("；")}</p>
+              ) : null}
+              <p className="border-t border-white/10 pt-3 text-white/50">{analysis.disclaimer}</p>
+            </div>
+          ) : null}
+
+          {report ? (
+            <div className="mt-4 rounded-md border border-emerald-400/30 bg-emerald-950/30 p-4 text-sm text-emerald-100">
+              PDF 已生成：{report.fileName}
             </div>
           ) : null}
         </section>

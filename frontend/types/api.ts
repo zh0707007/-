@@ -41,6 +41,40 @@ export type Pillar = {
   shensha: string[];
 };
 
+export type LuckCycle = {
+  index: number;
+  startYear: number;
+  endYear: number;
+  startAge: number;
+  endAge: number;
+  stem: string;
+  branch: string;
+  tenGodStem?: string | null;
+  tenGodBranch?: string | null;
+  isCurrent: boolean;
+};
+
+export type AnnualCycle = {
+  year: number;
+  age?: number | null;
+  stem: string;
+  branch: string;
+  tenGodStem?: string | null;
+  tenGodBranch?: string | null;
+  isCurrent: boolean;
+  relationSummary?: string;
+};
+
+export type MonthlyCycle = {
+  index: number;
+  solarTerm: string;
+  solarTermDate: string;
+  stem: string;
+  branch: string;
+  relationSummary?: string;
+  isCurrent: boolean;
+};
+
 export type BaziChart = {
   chartId: string;
   profile: {
@@ -61,8 +95,33 @@ export type BaziChart = {
   };
   dayMaster: string;
   fiveElementStats: Record<string, number>;
-  luckCycles: unknown[];
-  annualCycles: unknown[];
-  monthlyCycles: unknown[];
+  luckCycles: LuckCycle[];
+  annualCycles: AnnualCycle[];
+  monthlyCycles: MonthlyCycle[];
   warnings: string[];
+};
+
+export type AnalysisResult = {
+  analysisId: string;
+  chartId: string;
+  status: "completed" | "fallback" | string;
+  modelName?: string | null;
+  summary: string;
+  sections: {
+    title: string;
+    content: string;
+  }[];
+  imagePromptSummary: string;
+  disclaimer: string;
+  warnings: string[];
+};
+
+export type PdfReport = {
+  reportId: string;
+  chartId: string;
+  analysisId: string;
+  fileName: string;
+  downloadUrl: string;
+  expiresAt: string;
+  status: "ready" | string;
 };

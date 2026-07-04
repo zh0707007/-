@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "latest",
@@ -25,7 +25,7 @@
     "eslint": "latest",
     "eslint-config-next": "latest",
     "postcss": "latest",
-    "tailwindcss": "latest",
+    "tailwindcss": "^3.4.17",
     "typescript": "latest"
   }
 }

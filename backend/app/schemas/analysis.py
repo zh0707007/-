@@ -17,3 +17,22 @@ class AnalysisGenerateRequest(BaseModel):
     analysis_options: AnalysisOptions = Field(default_factory=AnalysisOptions, alias="analysisOptions")
 
     model_config = {"populate_by_name": True}
+
+
+class AnalysisSection(BaseModel):
+    title: str
+    content: str
+
+
+class AnalysisResultPayload(BaseModel):
+    analysis_id: str = Field(alias="analysisId")
+    chart_id: str = Field(alias="chartId")
+    status: str
+    model_name: str | None = Field(default=None, alias="modelName")
+    summary: str
+    sections: list[AnalysisSection]
+    image_prompt_summary: str = Field(alias="imagePromptSummary")
+    disclaimer: str
+    warnings: list[str] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}

@@ -149,3 +149,88 @@ def test_unknown_birth_hour_omits_hour_pillar():
     payload = response.json()
     assert payload["data"]["pillars"]["hour"] is None
     assert "未知时辰" in payload["data"]["warnings"][0]
+
+
+def test_analysis_generation_falls_back_without_llm_config():
+    chart = _create_manual_chart()
+
+    response = client.post(
+        "/api/analysis/generate",
+        json={
+            "chartId": chart["chartId"],
+            "analysisOptions": {
+                "includeCareer": True,
+                "includeWealth": True,
+                "includeRelationship": True,
+                "includeHealth": True,
+                "includeHistoryCalibration": False,
+                "yearsToLookAhead": 3,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["chartId"] == chart["chartId"]
+    assert payload["data"]["status"] == "fallback"
+    assert payload["data"]["analysisId"].startswith("analysis_")
+    assert "传统文化" in payload["data"]["disclaimer"]
+
+
+def test_pdf_report_generation_and_download():
+    chart = _create_manual_chart()
+    analysis_response = client.post(
+        "/api/analysis/generate",
+        json={"chartId": chart["chartId"], "analysisOptions": {}},
+    )
+    analysis = analysis_response.json()["data"]
+
+    response = client.post(
+        "/api/report/pdf",
+        json={"chartId": chart["chartId"], "analysisId": analysis["analysisId"]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["status"] == "ready"
+    assert payload["data"]["downloadUrl"].startswith("/api/report/download/")
+
+    download_response = client.get(payload["data"]["downloadUrl"])
+    assert download_response.status_code == 200
+    assert download_response.headers["content-type"] == "application/pdf"
+    assert download_response.content.startswith(b"%PDF")
+
+
+def test_analysis_chart_not_found():
+    response = client.post(
+        "/api/analysis/generate",
+        json={"chartId": "chart_missing", "analysisOptions": {}},
+    )
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "CHART_NOT_FOUND"
+
+
+def _create_manual_chart() -> dict:
+    response = client.post(
+        "/api/chart/calculate",
+        json={
+            "inputMode": "manual",
+            "birthInput": None,
+            "manualBaziInput": {
+                "name": "张三",
+                "gender": "male",
+                "yearPillar": "己巳",
+                "monthPillar": "丙子",
+                "dayPillar": "丙寅",
+                "hourPillar": "戊子",
+                "unknownBirthHour": False,
+            },
+        },
+    )
+    assert response.status_code == 200
+    return response.json()["data"]
