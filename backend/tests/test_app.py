@@ -281,7 +281,12 @@ def test_unknown_birth_hour_omits_hour_pillar():
     assert "未知时辰" in payload["data"]["warnings"][0]
 
 
-def test_analysis_generation_falls_back_without_llm_config():
+def test_analysis_generation_falls_back_without_llm_config(monkeypatch):
+    monkeypatch.setattr(
+        analysis_route.llm_client,
+        "_configuration_warning",
+        lambda: "LLM 未配置 API Key，已生成本地摘要解读",
+    )
     chart = _create_manual_chart()
 
     response = client.post(
@@ -311,7 +316,7 @@ def test_analysis_generation_falls_back_without_llm_config():
 def test_analysis_generation_falls_back_on_llm_timeout(monkeypatch):
     chart = _create_manual_chart()
 
-    monkeypatch.setattr(analysis_route.llm_client, "_is_configured", lambda: True)
+    monkeypatch.setattr(analysis_route.llm_client, "_configuration_warning", lambda: None)
 
     def raise_timeout(chart, options):
         raise TimeoutError("simulated timeout")
@@ -356,8 +361,8 @@ def test_get_analysis_not_found():
     assert payload["error"]["code"] == "ANALYSIS_NOT_FOUND"
 
 
-def test_pdf_report_generation_and_download():
-    chart, analysis, response = _create_pdf_report()
+def test_pdf_report_generation_and_download(monkeypatch):
+    chart, analysis, response = _create_pdf_report(monkeypatch)
 
     assert response.status_code == 200
     payload = response.json()
@@ -373,8 +378,8 @@ def test_pdf_report_generation_and_download():
     assert payload["data"]["analysisId"] == analysis["analysisId"]
 
 
-def test_get_pdf_report_by_id_and_latest_for_chart():
-    chart, analysis, report_response = _create_pdf_report()
+def test_get_pdf_report_by_id_and_latest_for_chart(monkeypatch):
+    chart, analysis, report_response = _create_pdf_report(monkeypatch)
     report = report_response.json()["data"]
 
     by_id_response = client.get(f"/api/report/{report['reportId']}")
@@ -387,7 +392,8 @@ def test_get_pdf_report_by_id_and_latest_for_chart():
     assert "filePath" not in by_id_response.json()["data"]
 
 
-def test_pdf_report_generation_with_chart_warnings():
+def test_pdf_report_generation_with_chart_warnings(monkeypatch):
+    _patch_completed_llm(monkeypatch)
     chart = _create_manual_chart(unknown_birth_hour=True)
     analysis_response = client.post(
         "/api/analysis/generate",
@@ -404,6 +410,31 @@ def test_pdf_report_generation_with_chart_warnings():
     payload = response.json()
     assert payload["success"] is True
     assert payload["data"]["status"] == "ready"
+
+
+def test_pdf_report_rejects_fallback_analysis(monkeypatch):
+    monkeypatch.setattr(
+        analysis_route.llm_client,
+        "_configuration_warning",
+        lambda: "LLM 未配置 API Key，已生成本地摘要解读",
+    )
+    chart = _create_manual_chart()
+    analysis_response = client.post(
+        "/api/analysis/generate",
+        json={"chartId": chart["chartId"], "analysisOptions": {}},
+    )
+    analysis = analysis_response.json()["data"]
+
+    response = client.post(
+        "/api/report/pdf",
+        json={"chartId": chart["chartId"], "analysisId": analysis["analysisId"]},
+    )
+
+    assert response.status_code == 409
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "AI_ANALYSIS_REQUIRED"
+    assert payload["error"]["details"]["analysisStatus"] == "fallback"
 
 
 def test_pdf_download_report_not_found():
@@ -476,7 +507,8 @@ def _create_manual_chart(unknown_birth_hour: bool = False) -> dict:
     return response.json()["data"]
 
 
-def _create_pdf_report() -> tuple[dict, dict, object]:
+def _create_pdf_report(monkeypatch) -> tuple[dict, dict, object]:
+    _patch_completed_llm(monkeypatch)
     chart = _create_manual_chart()
     analysis_response = client.post(
         "/api/analysis/generate",
@@ -488,6 +520,23 @@ def _create_pdf_report() -> tuple[dict, dict, object]:
         json={"chartId": chart["chartId"], "analysisId": analysis["analysisId"]},
     )
     return chart, analysis, report_response
+
+
+def _patch_completed_llm(monkeypatch) -> None:
+    monkeypatch.setattr(analysis_route.llm_client, "_configuration_warning", lambda: None)
+
+    def generate_with_openai(chart, options):
+        return analysis_route.llm_client._normalize_result(
+            chart=chart,
+            model_name="test-llm",
+            status="completed",
+            summary="这是由测试模拟的大模型生成的解读。",
+            sections=[{"title": "综合解读", "content": "测试大模型解读内容。"}],
+            image_prompt_summary="测试画像摘要。",
+            warnings=[],
+        )
+
+    monkeypatch.setattr(analysis_route.llm_client, "_generate_with_openai", generate_with_openai)
 
 
 def _insert_report_record(report_id: str, expires_at: datetime) -> None:

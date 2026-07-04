@@ -15,8 +15,9 @@ class LlmClient:
     """OpenAI-compatible analysis generator with deterministic local fallback."""
 
     def generate(self, chart: dict, options: AnalysisOptions) -> dict:
-        if not self._is_configured():
-            return self._fallback_analysis(chart, options, warning="LLM 未配置，已生成本地摘要解读")
+        configuration_warning = self._configuration_warning()
+        if configuration_warning:
+            return self._fallback_analysis(chart, options, warning=configuration_warning)
 
         try:
             return self._generate_with_openai(chart, options)
@@ -24,16 +25,36 @@ class LlmClient:
             if self._is_timeout_error(exc):
                 warning = "LLM 调用超时，已保留命盘并生成本地摘要解读"
             else:
-                warning = "LLM 调用失败，已保留命盘并生成本地摘要解读"
+                warning = (
+                    f"LLM 调用失败（{self._provider_error_hint(exc)}），"
+                    "已保留命盘并生成本地摘要解读"
+                )
             return self._fallback_analysis(chart, options, warning=warning)
 
     def _is_configured(self) -> bool:
-        return bool(
-            settings.llm_api_key
-            and settings.llm_model
-            and settings.llm_api_key != "replace-with-real-key"
-            and settings.llm_model != "replace-with-model-name"
-        )
+        return self._configuration_warning() is None
+
+    def _configuration_warning(self) -> str | None:
+        placeholder_keys = {
+            "replace-with-real-key",
+            "replace-with-your-real-api-key",
+            "your-openai-api-key",
+        }
+        placeholder_models = {
+            "replace-with-model-name",
+            "replace-with-your-model-name",
+        }
+        api_key = (settings.llm_api_key or "").strip()
+        model = (settings.llm_model or "").strip()
+        base_url = (settings.llm_base_url or "").strip().lower()
+
+        if not api_key or api_key in placeholder_keys:
+            return "LLM 未配置 API Key，已生成本地摘要解读"
+        if not model or model in placeholder_models:
+            return "LLM 未配置模型名称，已生成本地摘要解读"
+        if "api.openai.com" in base_url and not api_key.startswith("sk-"):
+            return "OpenAI API Key 格式不正确，应以 sk- 或 sk-proj- 开头，已生成本地摘要解读"
+        return None
 
     def _is_timeout_error(self, exc: Exception) -> bool:
         return isinstance(exc, TimeoutError) or exc.__class__.__name__ in {
@@ -41,6 +62,22 @@ class LlmClient:
             "TimeoutException",
             "ReadTimeout",
         }
+
+    def _provider_error_hint(self, exc: Exception) -> str:
+        error_code = str(getattr(exc, "code", "") or "").lower()
+        status_code = getattr(exc, "status_code", None)
+        message = str(exc).lower()
+        error_name = exc.__class__.__name__
+
+        if status_code in {401, 403} or "authentication" in message or "api key" in message:
+            return "API Key 无效或无权限"
+        if status_code == 404 or "model_not_found" in error_code or "model" in message:
+            return "模型名称不可用或账号无模型权限"
+        if status_code == 429 or "rate_limit" in error_code or "quota" in message:
+            return "额度不足或请求频率受限"
+        if status_code and status_code >= 500:
+            return "模型服务暂时不可用"
+        return error_name
 
     def _generate_with_openai(self, chart: dict, options: AnalysisOptions) -> dict:
         from openai import OpenAI
@@ -53,6 +90,7 @@ class LlmClient:
         response = client.chat.completions.create(
             model=settings.llm_model,
             temperature=0.4,
+            response_format={"type": "json_object"},
             messages=[
                 {
                     "role": "system",

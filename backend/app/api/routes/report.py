@@ -39,6 +39,13 @@ def generate_pdf_report(payload: PdfReportRequest, db: Session = Depends(get_db)
     analysis_record = db.get(AnalysisResult, payload.analysis_id)
     if analysis_record is None or analysis_record.chart_id != payload.chart_id:
         return error_response("ANALYSIS_NOT_FOUND", "未找到对应 AI 解读", status_code=404)
+    if analysis_record.status != "completed":
+        return error_response(
+            "AI_ANALYSIS_REQUIRED",
+            "PDF 报告必须基于大模型成功生成的 AI 解读，请先重新生成 AI 解读",
+            status_code=409,
+            details={"analysisStatus": analysis_record.status},
+        )
 
     try:
         report = pdf_service.render(chart_record.chart_data, analysis_record.result_data)

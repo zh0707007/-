@@ -38,3 +38,26 @@ def test_llm_json_parser_extracts_object_from_text():
     )
 
     assert parsed["imagePromptSummary"] == "画像"
+
+
+def test_llm_provider_error_hint_for_missing_model():
+    class MissingModelError(Exception):
+        status_code = 404
+        code = "model_not_found"
+
+    hint = LlmClient()._provider_error_hint(MissingModelError("model not found"))
+
+    assert hint == "模型名称不可用或账号无模型权限"
+
+
+def test_llm_configuration_warning_for_invalid_openai_key(monkeypatch):
+    from app.services.llm import client as llm_module
+
+    monkeypatch.setattr(llm_module.settings, "llm_base_url", "https://api.openai.com/v1")
+    monkeypatch.setattr(llm_module.settings, "llm_api_key", "sq-not-an-openai-key")
+    monkeypatch.setattr(llm_module.settings, "llm_model", "gpt-5.5")
+
+    warning = LlmClient()._configuration_warning()
+
+    assert warning is not None
+    assert "格式不正确" in warning

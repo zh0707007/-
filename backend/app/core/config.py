@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = 60
     report_expires_hours: int = 24
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8-sig")
 
 
 settings = Settings()

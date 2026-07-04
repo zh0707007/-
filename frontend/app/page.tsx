@@ -310,12 +310,26 @@ export default function HomePage() {
     setError(null);
     try {
       let currentAnalysis = analysis;
-      if (!currentAnalysis) {
+      if (!currentAnalysis || currentAnalysis.status !== "completed") {
         setIsAnalyzing(true);
-        currentAnalysis = await generateAnalysis(chart);
-        setIsAnalyzing(false);
+        try {
+          currentAnalysis = await generateAnalysis(chart);
+        } finally {
+          setIsAnalyzing(false);
+        }
       }
       if (!currentAnalysis) {
+        return;
+      }
+      if (currentAnalysis.status !== "completed") {
+        const analysisWarning = currentAnalysis.warnings[0];
+        setError({
+          code: "AI_ANALYSIS_REQUIRED",
+          message: analysisWarning
+            ? `PDF 报告必须基于大模型成功生成的 AI 解读。当前失败原因：${analysisWarning}`
+            : "PDF 报告必须基于大模型成功生成的 AI 解读，请检查模型配置后重新生成。",
+          details: { analysisStatus: currentAnalysis.status }
+        });
         return;
       }
 
@@ -732,6 +746,12 @@ export default function HomePage() {
               {isGeneratingReport ? "PDF 生成中..." : "下载 PDF 报告"}
             </button>
           </div>
+
+          {error ? (
+            <div className="mt-3 rounded-md border border-red-400/30 bg-red-950/30 p-3 text-sm text-red-100">
+              {error.message}
+            </div>
+          ) : null}
 
           {analysis ? (
             <div className="mt-5 space-y-4 rounded-md bg-black/20 p-4 text-sm leading-7 text-white/70">

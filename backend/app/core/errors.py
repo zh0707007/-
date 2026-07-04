@@ -13,6 +13,7 @@ class ErrorCode(StrEnum):
     llm_provider_error = "LLM_PROVIDER_ERROR"
     analysis_generation_error = "ANALYSIS_GENERATION_ERROR"
     analysis_not_found = "ANALYSIS_NOT_FOUND"
+    ai_analysis_required = "AI_ANALYSIS_REQUIRED"
     pdf_render_error = "PDF_RENDER_ERROR"
     report_not_found = "REPORT_NOT_FOUND"
     report_expired = "REPORT_EXPIRED"
