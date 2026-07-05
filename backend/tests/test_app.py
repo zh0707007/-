@@ -21,6 +21,19 @@ def test_geo_search_scaffold_response():
     assert payload["requestId"].startswith("req_")
 
 
+def test_geo_search_supports_nationwide_prefecture_city():
+    for keyword in ["昭通", "云南昭通", "云南省昭通市"]:
+        response = client.get("/api/geo/search", params={"keyword": keyword})
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert payload["data"][0]["province"] == "云南省"
+        assert payload["data"][0]["city"] == "昭通市"
+        assert payload["data"][0]["latitude"]
+        assert payload["data"][0]["longitude"]
+
+
 def test_geo_search_rejects_empty_keyword():
     response = client.get("/api/geo/search", params={"keyword": ""})
 

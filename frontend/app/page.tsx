@@ -468,7 +468,7 @@ export default function HomePage() {
                   className="h-12 w-full rounded-md border border-white/10 bg-black/20 px-4 text-white outline-none focus:border-gold"
                   maxLength={30}
                   onChange={(event) => setGeoKeyword(event.target.value)}
-                  placeholder="输入城市，如 北京、成都"
+                  placeholder="输入城市，如 北京、云南昭通"
                   value={geoKeyword}
                 />
                 <p className="mt-2 text-xs text-white/45">
