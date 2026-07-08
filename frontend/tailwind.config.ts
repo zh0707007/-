@@ -5,9 +5,9 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#101010",
-        panel: "#181818",
-        gold: "#f0c27b"
+        ink: "rgb(var(--color-ink) / <alpha-value>)",
+        panel: "rgb(var(--color-panel) / <alpha-value>)",
+        gold: "rgb(var(--color-gold) / <alpha-value>)"
       }
     }
   },

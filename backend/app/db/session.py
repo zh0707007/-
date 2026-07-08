@@ -8,8 +8,9 @@ from app.models.analysis import AnalysisResult
 from app.models.base import Base
 from app.models.chart import Chart, ChartRequest
 from app.models.report import PdfReport
+from app.models.topic_analysis import TopicAnalysisResult
 
-_ = (AnalysisResult, Chart, ChartRequest, PdfReport)
+_ = (AnalysisResult, Chart, ChartRequest, PdfReport, TopicAnalysisResult)
 
 
 engine = create_engine(

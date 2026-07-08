@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.analysis import AnalysisResult
 from app.models.chart import Chart
 from app.models.report import PdfReport
+from app.models.topic_analysis import TopicAnalysisResult
 from app.schemas.report import PdfReportRequest
 from app.services.report.pdf import PdfReportService
 
@@ -47,8 +48,42 @@ def generate_pdf_report(payload: PdfReportRequest, db: Session = Depends(get_db)
             details={"analysisStatus": analysis_record.status},
         )
 
+    topic_records = []
+    if payload.topic_analysis_ids:
+        topic_records = [
+            record
+            for record in (db.get(TopicAnalysisResult, topic_id) for topic_id in payload.topic_analysis_ids)
+            if record is not None
+            and record.chart_id == payload.chart_id
+            and record.status == "completed"
+        ]
+    else:
+        for topic_slug in [
+            "yongshen",
+            "shishen",
+            "personality",
+            "career-wealth",
+            "relationship",
+            "health",
+            "cities",
+        ]:
+            topic_record = db.scalars(
+                select(TopicAnalysisResult)
+                .where(TopicAnalysisResult.chart_id == payload.chart_id)
+                .where(TopicAnalysisResult.topic_slug == topic_slug)
+                .where(TopicAnalysisResult.status == "completed")
+                .order_by(TopicAnalysisResult.created_at.desc())
+                .limit(1)
+            ).first()
+            if topic_record is not None:
+                topic_records.append(topic_record)
+
     try:
-        report = pdf_service.render(chart_record.chart_data, analysis_record.result_data)
+        report = pdf_service.render(
+            chart_record.chart_data,
+            analysis_record.result_data,
+            [record.result_data for record in topic_records],
+        )
     except Exception:
         return error_response("PDF_RENDER_ERROR", "PDF 报告生成失败", status_code=500)
 

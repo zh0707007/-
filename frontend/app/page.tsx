@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { TopicNavigation } from "@/components/topic-navigation";
 import { apiOrigin, apiRequest } from "@/lib/api/client";
 import type { AnalysisResult, ApiError, BaziChart, BirthPlace, Gender, InputMode, PdfReport } from "@/types/api";
 
@@ -193,6 +194,27 @@ export default function HomePage() {
     return null;
   }
 
+  function topicBlockedMessage() {
+    if (!chart) {
+      return "请先完成首页排盘，再进入专题页面。";
+    }
+    if (!analysis) {
+      return "请先生成 AI 解读，再进入专题页面。";
+    }
+    return "专题页面需要大模型成功生成的 AI 解读，请检查模型配置后重新生成。";
+  }
+
+  function handleBlockedTopicClick() {
+    setError({
+      code: "TOPIC_ANALYSIS_NOT_READY",
+      message: topicBlockedMessage(),
+      details: {
+        hasChart: Boolean(chart),
+        analysisStatus: analysis?.status ?? null
+      }
+    });
+  }
+
   async function handleSubmit() {
     setError(null);
 
@@ -361,12 +383,21 @@ export default function HomePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-5 py-8">
-      <header className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold tracking-normal">首页排盘</h1>
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-8">
+      <TopicNavigation
+        analysisId={analysis?.status === "completed" ? analysis.analysisId : null}
+        chartId={analysis?.status === "completed" ? chart?.chartId : null}
+        onBlockedTopicClick={handleBlockedTopicClick}
+      />
+
+      <header className="mx-auto mb-8 flex w-full max-w-3xl flex-col gap-4 text-center sm:text-left">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-normal">首页排盘</h1>
+          <p className="mt-1 text-sm text-white/50">四柱排盘、AI 解读与 PDF 报告</p>
+        </div>
       </header>
 
-      <section className="rounded-lg border border-white/10 bg-panel p-6 shadow-2xl">
+      <section className="mx-auto w-full max-w-3xl rounded-lg border border-white/10 bg-panel p-6 shadow-2xl">
         <div className="space-y-5">
           <div>
             <label className="mb-2 block text-sm text-white/70">姓名</label>
@@ -475,7 +506,7 @@ export default function HomePage() {
                   当前：{selectedPlace.name ?? selectedPlace.city}，{selectedPlace.timezone}
                 </p>
                 {geoResults.length > 0 ? (
-                  <div className="absolute left-0 right-0 z-10 mt-2 overflow-hidden rounded-md border border-white/10 bg-[#121212] shadow-2xl">
+                  <div className="absolute left-0 right-0 z-10 mt-2 overflow-hidden rounded-md border border-white/10 bg-panel shadow-2xl">
                     {geoResults.map((place) => (
                       <button
                         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm text-white/75 hover:bg-gold/10 hover:text-gold"
@@ -535,7 +566,7 @@ export default function HomePage() {
       </section>
 
       {chart ? (
-        <section className="mt-6 rounded-lg border border-white/10 bg-panel p-6">
+        <section className="mx-auto mt-6 w-full max-w-3xl rounded-lg border border-white/10 bg-panel p-6">
           <div className="mb-4">
             <p className="text-sm text-gold">{chart.chartId}</p>
             <h2 className="text-2xl font-semibold">{chart.profile.name} 的命盘</h2>

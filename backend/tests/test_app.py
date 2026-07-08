@@ -6,6 +6,8 @@ from app.db.session import SessionLocal, init_db
 from app.main import app
 from app.models.report import PdfReport
 from app.api.routes import analysis as analysis_route
+from app.api.routes import report as report_route
+from app.api.routes import topic_analysis as topic_analysis_route
 
 
 client = TestClient(app)
@@ -450,6 +452,91 @@ def test_pdf_report_rejects_fallback_analysis(monkeypatch):
     assert payload["error"]["details"]["analysisStatus"] == "fallback"
 
 
+def test_topic_analysis_generation_and_latest(monkeypatch):
+    _patch_completed_topic_llm(monkeypatch)
+    chart = _create_manual_chart()
+    analysis_response = client.post(
+        "/api/analysis/generate",
+        json={"chartId": chart["chartId"], "analysisOptions": {}},
+    )
+    analysis = analysis_response.json()["data"]
+
+    response = client.post(
+        "/api/topic-analysis/generate",
+        json={
+            "chartId": chart["chartId"],
+            "analysisId": analysis["analysisId"],
+            "topicSlug": "yongshen",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["status"] == "completed"
+    assert payload["data"]["topicSlug"] == "yongshen"
+    assert payload["data"]["keyPoints"]
+
+    latest_response = client.get(f"/api/topic-analysis/chart/{chart['chartId']}/yongshen/latest")
+    assert latest_response.status_code == 200
+    assert latest_response.json()["data"]["topicAnalysisId"] == payload["data"]["topicAnalysisId"]
+
+
+def test_pdf_report_uses_latest_completed_topic_analysis(monkeypatch):
+    _patch_completed_topic_llm(monkeypatch)
+    chart = _create_manual_chart()
+    analysis_response = client.post(
+        "/api/analysis/generate",
+        json={"chartId": chart["chartId"], "analysisOptions": {}},
+    )
+    analysis = analysis_response.json()["data"]
+    topic_response = client.post(
+        "/api/topic-analysis/generate",
+        json={
+            "chartId": chart["chartId"],
+            "analysisId": analysis["analysisId"],
+            "topicSlug": "yongshen",
+        },
+    )
+    topic = topic_response.json()["data"]
+    captured = {}
+    report_id = f"report_topic_merge_test_{chart['chartId']}"
+
+    def render(chart_data, analysis_data, topic_analyses=None):
+        captured["topic_analyses"] = topic_analyses
+        return {
+            "reportId": report_id,
+            "fileName": f"{report_id}.pdf",
+            "filePath": f"reports/{report_id}.pdf",
+            "downloadUrl": f"/api/report/download/{report_id}",
+            "expiresAt": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+            "status": "ready",
+        }
+
+    monkeypatch.setattr(report_route.pdf_service, "render", render)
+
+    response = client.post(
+        "/api/report/pdf",
+        json={"chartId": chart["chartId"], "analysisId": analysis["analysisId"]},
+    )
+
+    assert response.status_code == 200
+    assert captured["topic_analyses"][0]["topicAnalysisId"] == topic["topicAnalysisId"]
+    assert captured["topic_analyses"][0]["status"] == "completed"
+
+
+def test_topic_analysis_invalid_topic():
+    chart = _create_manual_chart()
+
+    response = client.post(
+        "/api/topic-analysis/generate",
+        json={"chartId": chart["chartId"], "topicSlug": "missing"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_TOPIC"
+
+
 def test_pdf_download_report_not_found():
     response = client.get("/api/report/download/report_missing")
 
@@ -544,12 +631,62 @@ def _patch_completed_llm(monkeypatch) -> None:
             model_name="test-llm",
             status="completed",
             summary="这是由测试模拟的大模型生成的解读。",
-            sections=[{"title": "综合解读", "content": "测试大模型解读内容。"}],
+            sections=_full_ai_sections(),
             image_prompt_summary="测试画像摘要。",
             warnings=[],
         )
 
     monkeypatch.setattr(analysis_route.llm_client, "_generate_with_openai", generate_with_openai)
+
+
+def _patch_completed_topic_llm(monkeypatch) -> None:
+    _patch_completed_llm(monkeypatch)
+    monkeypatch.setattr(topic_analysis_route.llm_client, "_configuration_warning", lambda: None)
+
+    def generate_topic(chart, topic_slug, base_analysis=None):
+        return topic_analysis_route.llm_client._normalize_topic_result(
+            chart=chart,
+            topic_slug=topic_slug,
+            topic={"title": "用神分析与排序"},
+            model_name="test-llm",
+            status="completed",
+            summary="专题摘要内容" * 12,
+            key_points=["重点一", "重点二", "重点三"],
+            sections=[
+                {"title": f"专题小节{i}", "content": "专题详细分析内容" * 60}
+                for i in range(1, 5)
+            ],
+            pdf_excerpt="专题 PDF 摘要内容" * 10,
+            warnings=[],
+        )
+
+    monkeypatch.setattr(topic_analysis_route.llm_client, "generate_topic", generate_topic)
+
+
+def _full_ai_sections() -> list[dict]:
+    titles = [
+        "一、身强/弱分析",
+        "二、用神分析与排序",
+        "三、十神分析",
+        "四、性格特征",
+        "五、事业方向",
+        "六、个人财富",
+        "七、婚姻感情",
+        "八、身体健康",
+        "九、适合发展的城市",
+        "十、当前大运与流年总论",
+    ]
+    return [
+        {
+            "title": title,
+            "content": (
+                f"{title} 的测试大模型解读内容。此段用于确认 PDF 报告不会使用待生成占位文本，"
+                "并且每个专题章节都具备足够长度，可以支撑独立页面展示。"
+            )
+            * 8,
+        }
+        for title in titles
+    ]
 
 
 def _insert_report_record(report_id: str, expires_at: datetime) -> None:

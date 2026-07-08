@@ -134,6 +134,25 @@ export type AnalysisResult = {
   warnings: string[];
 };
 
+export type TopicAnalysisResult = {
+  topicAnalysisId: string;
+  chartId: string;
+  analysisId?: string | null;
+  topicSlug: string;
+  title: string;
+  status: "completed" | "fallback" | string;
+  modelName?: string | null;
+  summary: string;
+  keyPoints: string[];
+  sections: {
+    title: string;
+    content: string;
+  }[];
+  pdfExcerpt: string;
+  disclaimer: string;
+  warnings: string[];
+};
+
 export type PdfReport = {
   reportId: string;
   chartId: string;
