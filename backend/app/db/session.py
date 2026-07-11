@@ -7,9 +7,36 @@ from app.core.config import settings
 from app.models.analysis import AnalysisResult
 from app.models.base import Base
 from app.models.chart import Chart, ChartRequest
+from app.models.platform import (
+    ClientProfile,
+    CommunityComment,
+    CommunityPost,
+    Membership,
+    Order,
+    Tenant,
+    TenantMember,
+    User,
+    UserSession,
+)
 from app.models.report import PdfReport
+from app.models.topic_analysis import TopicAnalysisResult
 
-_ = (AnalysisResult, Chart, ChartRequest, PdfReport)
+_ = (
+    AnalysisResult,
+    Chart,
+    ChartRequest,
+    ClientProfile,
+    CommunityComment,
+    CommunityPost,
+    Membership,
+    Order,
+    PdfReport,
+    Tenant,
+    TenantMember,
+    TopicAnalysisResult,
+    User,
+    UserSession,
+)
 
 
 engine = create_engine(

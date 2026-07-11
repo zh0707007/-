@@ -172,6 +172,7 @@ class ChartCalculator:
             "luckCycles": self._luck_cycles(base_year, pillars, profile["gender"], luck_start),
             "annualCycles": self._annual_cycles(base_year, day_master),
             "monthlyCycles": self._monthly_cycles(datetime.now().year, day_master),
+            "dailyCycle": self._daily_cycle(day_master),
             "warnings": warnings,
         }
 
@@ -335,6 +336,23 @@ class ChartCalculator:
         if current_dt.month == 1:
             return 11
         return current_dt.month - 2
+
+    def _daily_cycle(self, day_stem: str) -> dict:
+        Solar, _ = self._load_lunar_python()
+        today = datetime.now()
+        lunar = Solar.fromYmd(today.year, today.month, today.day).getLunar()
+        ganzhi = lunar.getDayInGanZhi()
+        stem = ganzhi[0]
+        branch = ganzhi[1]
+        return {
+            "date": today.strftime("%Y-%m-%d"),
+            "stem": stem,
+            "branch": branch,
+            "tenGodStem": TEN_GODS_BY_DAY_STEM[day_stem][stem],
+            "tenGodBranch": self._ten_god_for_branch(day_stem, branch),
+            "relationSummary": "",
+            "isCurrent": True,
+        }
 
     def _luck_direction(self, year_stem: str, gender: str) -> str:
         is_yang_year = year_stem in {"甲", "丙", "戊", "庚", "壬"}

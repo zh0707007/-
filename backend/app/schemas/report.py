@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class PdfReportRequest(BaseModel):
     chart_id: str = Field(alias="chartId")
     analysis_id: str = Field(alias="analysisId")
+    topic_analysis_ids: list[str] = Field(default_factory=list, alias="topicAnalysisIds")
 
     model_config = {"populate_by_name": True}
 

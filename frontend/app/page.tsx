@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
+import { BaziCycleBoard } from "@/components/bazi-cycle-board";
+import { BaziTimingTable } from "@/components/bazi-timing-table";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { TopicNavigation } from "@/components/topic-navigation";
 import { apiOrigin, apiRequest } from "@/lib/api/client";
-import type { AnalysisResult, ApiError, BaziChart, BirthPlace, Gender, InputMode, PdfReport } from "@/types/api";
+import { readPlatformSession, userRequest } from "@/lib/platform/session";
+import type { AnalysisResult, ApiError, BaziChart, BirthPlace, ClientProfilePublic, Gender, InputMode, PdfReport } from "@/types/api";
 
 const defaultPlace: BirthPlace = {
   name: "北京市",
@@ -19,7 +26,16 @@ const earthlyBranches = "子丑寅卯辰巳午未申酉戌亥";
 
 type PillarField = "yearPillar" | "monthPillar" | "dayPillar" | "hourPillar";
 
+const LAST_SESSION_STORAGE_KEY = "bazi-last-session-v1";
+
+type StoredSession = {
+  analysis: AnalysisResult | null;
+  chart: BaziChart;
+  report: PdfReport | null;
+};
+
 export default function HomePage() {
+  const router = useRouter();
   const [name, setName] = useState("张三");
   const [gender, setGender] = useState<Gender>("male");
   const [inputMode, setInputMode] = useState<InputMode>("solar");
@@ -44,6 +60,9 @@ export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [hasRestoredSession, setHasRestoredSession] = useState(false);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
 
   const isManual = inputMode === "manual";
   const trueSolarPreview = useMemo(() => {
@@ -56,6 +75,49 @@ export default function HomePage() {
       hour12: false
     });
   }, [birthDateTime, selectedPlace.longitude]);
+
+  useEffect(() => {
+    const session = readPlatformSession();
+    if (!session?.token) {
+      router.replace("/auth");
+      return;
+    }
+    setHasCheckedAuth(true);
+  }, [router]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(LAST_SESSION_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<StoredSession>;
+        if (parsed.chart?.chartId) {
+          setChart(parsed.chart);
+          setAnalysis(parsed.analysis ?? null);
+          setReport(parsed.report ?? null);
+        }
+      }
+    } catch {
+      window.localStorage.removeItem(LAST_SESSION_STORAGE_KEY);
+    } finally {
+      setHasRestoredSession(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasRestoredSession) {
+      return;
+    }
+    if (!chart) {
+      window.localStorage.removeItem(LAST_SESSION_STORAGE_KEY);
+      return;
+    }
+    const session: StoredSession = {
+      analysis,
+      chart,
+      report,
+    };
+    window.localStorage.setItem(LAST_SESSION_STORAGE_KEY, JSON.stringify(session));
+  }, [analysis, chart, hasRestoredSession, report]);
 
   useEffect(() => {
     if (isManual) {
@@ -191,6 +253,27 @@ export default function HomePage() {
     }
 
     return null;
+  }
+
+  function topicBlockedMessage() {
+    if (!chart) {
+      return "请先完成首页排盘，再进入专题页面。";
+    }
+    if (!analysis) {
+      return "请先生成 AI 解读，再进入专题页面。";
+    }
+    return "专题页面需要大模型成功生成的 AI 解读，请检查模型配置后重新生成。";
+  }
+
+  function handleBlockedTopicClick() {
+    setError({
+      code: "TOPIC_ANALYSIS_NOT_READY",
+      message: topicBlockedMessage(),
+      details: {
+        hasChart: Boolean(chart),
+        analysisStatus: analysis?.status ?? null
+      }
+    });
   }
 
   async function handleSubmit() {
@@ -360,13 +443,59 @@ export default function HomePage() {
     }
   }
 
-  return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-5 py-8">
-      <header className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold tracking-normal">首页排盘</h1>
-      </header>
+  async function handleSaveProfile() {
+    if (!chart) {
+      return;
+    }
+    const result = await userRequest<ClientProfilePublic>("/profiles", {
+      method: "POST",
+      body: JSON.stringify({
+        birthSummary: `${chart.profile.solarDateTime ?? ""} ${chart.profile.birthPlaceText ?? ""}`.trim(),
+        chartId: chart.chartId,
+        gender: chart.profile.gender,
+        name: chart.profile.name,
+        notes: `日主：${chart.dayMaster}`,
+        tags: ["首页排盘"],
+      }),
+    });
+    setProfileMessage(result.success ? "已保存到多人档案。" : result.error.message);
+  }
 
-      <section className="rounded-lg border border-white/10 bg-panel p-6 shadow-2xl">
+  if (!hasCheckedAuth) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-8">
+        <div className="rounded-lg border border-white/10 bg-panel p-6 text-sm text-white/60 shadow-2xl">
+          正在检查登录状态...
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen lg:grid lg:grid-cols-[296px_1fr]">
+      <TopicNavigation
+        analysisId={analysis?.status === "completed" ? analysis.analysisId : null}
+        chartId={analysis?.status === "completed" ? chart?.chartId : null}
+        onBlockedTopicClick={handleBlockedTopicClick}
+      />
+
+      <section className="min-w-0 px-4 py-5 sm:px-6 lg:px-10">
+        <header className="mb-5 flex min-h-12 flex-wrap items-center justify-end gap-2">
+          <Link className="app-button border border-white/10 text-white/70 hover:border-gold/40 hover:text-gold" href="/member">
+            用户中心
+          </Link>
+          <ThemeToggle variant="nav" />
+        </header>
+
+        <div className="app-card mx-auto mb-5 max-w-3xl overflow-hidden">
+          <div className="bg-gradient-to-r from-[rgb(103,75,30)] to-[rgb(151,103,30)] p-6 text-[rgb(255,255,255)] shadow-[0_18px_45px_rgba(75,57,25,0.18)] sm:p-8">
+            <p className="text-sm font-semibold text-[rgba(255,255,255,0.82)]">首页工作台</p>
+            <h1 className="mt-4 text-3xl font-semibold leading-tight">首页排盘</h1>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-[rgba(255,255,255,0.82)]">四柱排盘、AI 解读与 PDF 报告</p>
+          </div>
+        </div>
+
+      <section className="mx-auto w-full max-w-3xl rounded-lg border border-white/10 bg-panel p-6 shadow-2xl">
         <div className="space-y-5">
           <div>
             <label className="mb-2 block text-sm text-white/70">姓名</label>
@@ -468,14 +597,14 @@ export default function HomePage() {
                   className="h-12 w-full rounded-md border border-white/10 bg-black/20 px-4 text-white outline-none focus:border-gold"
                   maxLength={30}
                   onChange={(event) => setGeoKeyword(event.target.value)}
-                  placeholder="输入城市，如 北京、成都"
+                  placeholder="输入城市，如 北京、云南昭通"
                   value={geoKeyword}
                 />
                 <p className="mt-2 text-xs text-white/45">
                   当前：{selectedPlace.name ?? selectedPlace.city}，{selectedPlace.timezone}
                 </p>
                 {geoResults.length > 0 ? (
-                  <div className="absolute left-0 right-0 z-10 mt-2 overflow-hidden rounded-md border border-white/10 bg-[#121212] shadow-2xl">
+                  <div className="absolute left-0 right-0 z-10 mt-2 overflow-hidden rounded-md border border-white/10 bg-panel shadow-2xl">
                     {geoResults.map((place) => (
                       <button
                         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm text-white/75 hover:bg-gold/10 hover:text-gold"
@@ -535,7 +664,7 @@ export default function HomePage() {
       </section>
 
       {chart ? (
-        <section className="mt-6 rounded-lg border border-white/10 bg-panel p-6">
+        <section className="mx-auto mt-6 w-full max-w-3xl rounded-lg border border-white/10 bg-panel p-6">
           <div className="mb-4">
             <p className="text-sm text-gold">{chart.chartId}</p>
             <h2 className="text-2xl font-semibold">{chart.profile.name} 的命盘</h2>
@@ -556,45 +685,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] border-collapse text-center">
-              <thead className="text-sm text-white/50">
-                <tr>
-                  <th className="border border-white/10 p-3">项目</th>
-                  <th className="border border-white/10 p-3">年柱</th>
-                  <th className="border border-white/10 p-3">月柱</th>
-                  <th className="border border-white/10 p-3">日柱</th>
-                  <th className="border border-white/10 p-3">时柱</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="border border-white/10 p-3 text-white/50">天干</td>
-                  {(["year", "month", "day", "hour"] as const).map((key) => (
-                    <td className="border border-white/10 p-3 text-xl font-semibold" key={key}>
-                      {chart.pillars[key]?.stem ?? "未知"}
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className="border border-white/10 p-3 text-white/50">地支</td>
-                  {(["year", "month", "day", "hour"] as const).map((key) => (
-                    <td className="border border-white/10 p-3 text-xl font-semibold" key={key}>
-                      {chart.pillars[key]?.branch ?? "未知"}
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className="border border-white/10 p-3 text-white/50">十神</td>
-                  {(["year", "month", "day", "hour"] as const).map((key) => (
-                    <td className="border border-white/10 p-3" key={key}>
-                      {chart.pillars[key]?.tenGod ?? "未知"}
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <BaziTimingTable chart={chart} />
 
           <div className="mt-4 rounded-md bg-black/20 p-4 text-sm text-white/70">
             五行统计：{Object.entries(chart.fiveElementStats).map(([key, value]) => `${key}${value}`).join(" / ")}
@@ -618,115 +709,7 @@ export default function HomePage() {
             </div>
           ) : null}
 
-          <div className="mt-5 space-y-5">
-            <div>
-              <h3 className="mb-3 text-lg font-semibold">大运</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] border-collapse text-center text-sm">
-                  <thead className="text-white/50">
-                    <tr>
-                      <th className="border border-white/10 p-3">序号</th>
-                      <th className="border border-white/10 p-3">顺逆</th>
-                      <th className="border border-white/10 p-3">年龄</th>
-                      <th className="border border-white/10 p-3">年份</th>
-                      <th className="border border-white/10 p-3">天干</th>
-                      <th className="border border-white/10 p-3">地支</th>
-                      <th className="border border-white/10 p-3">十神</th>
-                      <th className="border border-white/10 p-3">当前</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {chart.luckCycles.map((cycle) => (
-                      <tr className={cycle.isCurrent ? "bg-gold/10 text-gold" : ""} key={cycle.index}>
-                        <td className="border border-white/10 p-3">{cycle.index}</td>
-                        <td className="border border-white/10 p-3">{cycle.directionText ?? ""}</td>
-                        <td className="border border-white/10 p-3">
-                          {cycle.startAge}-{cycle.endAge}
-                        </td>
-                        <td className="border border-white/10 p-3">
-                          {cycle.startYear}-{cycle.endYear}
-                        </td>
-                        <td className="border border-white/10 p-3">{cycle.stem}</td>
-                        <td className="border border-white/10 p-3">{cycle.branch}</td>
-                        <td className="border border-white/10 p-3">
-                          {cycle.tenGodStem ?? ""}/{cycle.tenGodBranch ?? ""}
-                        </td>
-                        <td className="border border-white/10 p-3">{cycle.isCurrent ? "是" : ""}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="mb-3 text-lg font-semibold">流年</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] border-collapse text-center text-sm">
-                  <thead className="text-white/50">
-                    <tr>
-                      <th className="border border-white/10 p-3">年份</th>
-                      <th className="border border-white/10 p-3">年龄</th>
-                      <th className="border border-white/10 p-3">天干</th>
-                      <th className="border border-white/10 p-3">地支</th>
-                      <th className="border border-white/10 p-3">十神</th>
-                      <th className="border border-white/10 p-3">当前</th>
-                      <th className="border border-white/10 p-3">提示</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {chart.annualCycles.map((cycle) => (
-                      <tr className={cycle.isCurrent ? "bg-gold/10 text-gold" : ""} key={cycle.year}>
-                        <td className="border border-white/10 p-3">{cycle.year}</td>
-                        <td className="border border-white/10 p-3">{cycle.age ?? ""}</td>
-                        <td className="border border-white/10 p-3">{cycle.stem}</td>
-                        <td className="border border-white/10 p-3">{cycle.branch}</td>
-                        <td className="border border-white/10 p-3">
-                          {cycle.tenGodStem ?? ""}/{cycle.tenGodBranch ?? ""}
-                        </td>
-                        <td className="border border-white/10 p-3">{cycle.isCurrent ? "是" : ""}</td>
-                        <td className="border border-white/10 p-3">{cycle.relationSummary || "待解读"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="mb-3 text-lg font-semibold">流月</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[820px] border-collapse text-center text-sm">
-                  <thead className="text-white/50">
-                    <tr>
-                      <th className="border border-white/10 p-3">序号</th>
-                      <th className="border border-white/10 p-3">节气</th>
-                      <th className="border border-white/10 p-3">日期</th>
-                      <th className="border border-white/10 p-3">天干</th>
-                      <th className="border border-white/10 p-3">地支</th>
-                      <th className="border border-white/10 p-3">十神</th>
-                      <th className="border border-white/10 p-3">当前</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {chart.monthlyCycles.map((cycle) => (
-                      <tr className={cycle.isCurrent ? "bg-gold/10 text-gold" : ""} key={cycle.index}>
-                        <td className="border border-white/10 p-3">{cycle.index}</td>
-                        <td className="border border-white/10 p-3">{cycle.solarTerm}</td>
-                        <td className="border border-white/10 p-3">{cycle.solarTermDate}</td>
-                        <td className="border border-white/10 p-3">{cycle.stem}</td>
-                        <td className="border border-white/10 p-3">{cycle.branch}</td>
-                        <td className="border border-white/10 p-3">
-                          {cycle.tenGodStem ?? ""}/{cycle.tenGodBranch ?? ""}
-                        </td>
-                        <td className="border border-white/10 p-3">{cycle.isCurrent ? "是" : ""}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+          <BaziCycleBoard chart={chart} />
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <button
@@ -746,6 +729,14 @@ export default function HomePage() {
               {isGeneratingReport ? "PDF 生成中..." : "下载 PDF 报告"}
             </button>
           </div>
+          <button
+            className="mt-3 h-11 w-full rounded-md border border-white/10 bg-black/20 text-sm text-white/70 hover:border-gold/40 hover:text-gold"
+            onClick={handleSaveProfile}
+            type="button"
+          >
+            保存为多人档案
+          </button>
+          {profileMessage ? <p className="mt-3 rounded-md bg-black/20 p-3 text-sm text-gold">{profileMessage}</p> : null}
 
           {error ? (
             <div className="mt-3 rounded-md border border-red-400/30 bg-red-950/30 p-3 text-sm text-red-100">
@@ -793,6 +784,7 @@ export default function HomePage() {
           ) : null}
         </section>
       ) : null}
+      </section>
     </main>
   );
 }
