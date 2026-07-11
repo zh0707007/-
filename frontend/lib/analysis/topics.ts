@@ -11,7 +11,7 @@ export type AnalysisTopic = {
 export const analysisTopics: AnalysisTopic[] = [
   {
     slug: "yongshen",
-    title: "用神分析与排序",
+    title: "用神分析",
     subtitle: "梳理调候、扶抑、通关与五行取用顺序。",
     sectionTitles: ["二、用神分析与排序"],
     focusItems: ["五行强弱", "调候优先级", "喜忌排序", "大运配合"],
@@ -32,7 +32,7 @@ export const analysisTopics: AnalysisTopic[] = [
   },
   {
     slug: "career-wealth",
-    title: "事业与财富",
+    title: "事业财富",
     subtitle: "合并事业方向与财富路径，观察能力变现节奏。",
     sectionTitles: ["五、事业方向", "六、个人财富"],
     focusItems: ["适合行业", "能力模型", "财富路径", "风险边界"],

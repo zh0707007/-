@@ -6,7 +6,7 @@ type ThemeMode = "dark" | "light";
 
 const STORAGE_KEY = "bazi-theme-mode-v2";
 
-export function ThemeToggle() {
+export function ThemeToggle({ variant = "default" }: { variant?: "default" | "nav" }) {
   const [themeMode, setThemeMode] = useState<ThemeMode>("light");
 
   useEffect(() => {
@@ -22,13 +22,24 @@ export function ThemeToggle() {
     window.localStorage.setItem(STORAGE_KEY, themeMode);
   }, [themeMode]);
 
+  const shellClass =
+    variant === "nav"
+      ? "inline-flex self-center rounded-none border-l border-white/10 bg-black/10 p-0 sm:self-auto"
+      : "inline-flex self-center rounded-md border border-white/10 bg-black/20 p-1 sm:self-auto";
+
   return (
-    <div className="inline-flex self-center rounded-md border border-white/10 bg-black/20 p-1 sm:self-auto">
+    <div className={shellClass}>
       {(["light", "dark"] as const).map((mode) => (
         <button
           aria-pressed={themeMode === mode}
-          className={`h-9 rounded px-4 text-sm transition ${
-            themeMode === mode ? "bg-gold text-black" : "text-white/65 hover:text-gold"
+          className={`h-10 px-4 text-sm transition ${
+            themeMode === mode
+              ? variant === "nav"
+                ? "bg-gold text-black"
+                : "bg-gold text-black"
+              : variant === "nav"
+                ? "text-white/65 hover:bg-black/20 hover:text-gold"
+                : "text-white/65 hover:text-gold"
           }`}
           key={mode}
           onClick={() => setThemeMode(mode)}
